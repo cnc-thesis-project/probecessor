@@ -12,14 +12,21 @@ if __name__ == "__main__":
         print("error: Failed opening database '{}'.".format(sys.argv[1]))
         sys.exit(1)
 
-    c = dbh.cursor()
+    c1 = dbh.cursor()
 
-    c.execute("SELECT DISTINCT ip FROM Probe")
+    c1.execute("SELECT DISTINCT ip FROM Probe")
 
     while(True):
-        ip = c.fetchone()
-        if not ip:
+        ip_row = c1.fetchone()
+        if not ip_row:
             break
-        print(ip)
+        ip = ip_row[0]
+        print("handling ip {}".format(ip))
+
+        c2 = dbh.cursor()
+        c2.execute("SELECT * FROM Probe WHERE ip = ?", (ip,))
+
+        row = c2.fetchone()
+        print("have {}".format(row))
 
     dbh.close()
