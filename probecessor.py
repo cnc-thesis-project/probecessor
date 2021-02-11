@@ -1,5 +1,6 @@
 import sys
 import sqlite3
+import modules
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
@@ -21,12 +22,20 @@ if __name__ == "__main__":
         if not ip_row:
             break
         ip = ip_row[0]
-        print("handling ip {}".format(ip))
+        print("Handling host {}".format(ip))
 
         c2 = dbh.cursor()
         c2.execute("SELECT * FROM Probe WHERE ip = ?", (ip,))
 
-        row = c2.fetchone()
-        print("have {}".format(row))
+        while(True):
+            row = c2.fetchone()
+            if not row:
+                break
+
+            mod = modules.modules.get(row[0])
+            if not mod:
+                print("Processor module '{}' does not exist".format(row[0]))
+                break
+            mod.run(row)
 
     dbh.close()
