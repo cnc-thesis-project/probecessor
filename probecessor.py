@@ -15,27 +15,29 @@ if __name__ == "__main__":
 
     c1 = dbh.cursor()
 
-    c1.execute("SELECT DISTINCT ip FROM Probe")
+    c1.execute("SELECT DISTINCT ip, port FROM Probe;")
 
     while(True):
         ip_row = c1.fetchone()
         if not ip_row:
             break
         ip = ip_row[0]
-        print("Handling host {}".format(ip))
+        port = ip_row[1]
+        print("Handling host {}:{}".format(ip, port))
 
-        c2 = dbh.cursor()
-        c2.execute("SELECT * FROM Probe WHERE ip = ?", (ip,))
+        for m in modules.modules.keys():
+            print("Examining {}".format(m))
+            c2 = dbh.cursor()
+            c2.execute("SELECT * FROM Probe WHERE ip = ? AND port = ? AND name = ?", (ip,port,m,))
 
-        while(True):
-            row = c2.fetchone()
-            if not row:
+            rows = c2.fetchall()
+            if not rows:
                 break
 
-            mod = modules.modules.get(row[0])
+            mod = modules.modules.get(m)
             if not mod:
-                print("Processor module '{}' does not exist".format(row[0]))
+                print("Processor module '{}' does not exist".format(m))
                 break
-            mod.run(row)
+            mod.run(rows)
 
     dbh.close()
