@@ -13,17 +13,20 @@ def tag_recursive(element, depth=-1):
 
     return tag_str
 
+def get_type(rows, index_map, type):
+    for row in rows:
+        if row[index_map["type"]] == type:
+            return row
+    return None
 
-def run(row):
-    print("HTTP module handling probe")
-
-    if not row[4].startswith(b"HTTP/"):
+def process_probe(row, index_map):
+    if not row[index_map["data"]].startswith(b"HTTP/"):
         print("error: Not a HTTP response")
         return
 
     try:
         # split in headers and content
-        raw_headers, raw_html = row[4].split(b"\r\n\r\n", 1)
+        raw_headers, raw_html = row[index_map["data"]].split(b"\r\n\r\n", 1)
         request_line, headers_alone = raw_headers.split(b"\r\n", 1)
     except ValueError as e:
         print("error:", e)
@@ -54,7 +57,17 @@ def run(row):
     print("Date:", date)
     print("DOM tree:", tag_tree)
 
-    #for element in tree.iter():
-    #    print(depth(element))
+    return
 
-    print()
+def run(rows, index_map):
+    print("HTTP module handling probe")
+
+    process_probe(get_type(rows, index_map, "get_root"), index_map)
+    process_probe(get_type(rows, index_map, "head_root"), index_map)
+    process_probe(get_type(rows, index_map, "not_exist"), index_map)
+    process_probe(get_type(rows, index_map, "invalid_version"), index_map)
+    process_probe(get_type(rows, index_map, "invalid_protocol"), index_map)
+    process_probe(get_type(rows, index_map, "long_path"), index_map)
+    process_probe(get_type(rows, index_map, "get_favicon"), index_map)
+    process_probe(get_type(rows, index_map, "get_robots"), index_map)
+    process_probe(get_type(rows, index_map, "delete_root"), index_map)

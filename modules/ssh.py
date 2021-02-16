@@ -1,2 +1,2 @@
-def run(row):
-    print("SSH module handling probe", row)
+def run(rows, index_map):
+    print("SSH module handling probe", rows)
