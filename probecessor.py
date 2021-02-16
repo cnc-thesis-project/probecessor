@@ -30,6 +30,9 @@ if __name__ == "__main__":
             c2 = dbh.cursor()
             c2.execute("SELECT * FROM Probe WHERE ip = ? AND port = ? AND name = ?", (ip,port,m,))
 
+            # get mapping of index -> column name
+            index_map = dict(zip(map(lambda x: x[0], c2.description), range(len(c2.description))))
+
             rows = c2.fetchall()
             if not rows:
                 break
@@ -38,6 +41,6 @@ if __name__ == "__main__":
             if not mod:
                 print("Processor module '{}' does not exist".format(m))
                 break
-            mod.run(rows)
+            mod.run(rows, index_map)
 
     dbh.close()
