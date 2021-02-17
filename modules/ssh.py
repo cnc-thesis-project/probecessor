@@ -17,18 +17,20 @@ def parse_string(data):
 
 
 def parse_algo_negotiation(data):
-    algo_lists = {
-        "kex_algorithms": [],
-        "server_host_key_algorithms": [],
-        "encryption_algorithms_client_to_server": [],
-        "encryption_algorithms_server_to_client": [],
-        "mac_algorithms_client_to_server": [],
-        "mac_algorithms_server_to_client": [],
-        "compression_algorithms_client_to_server": [],
-        "compression_algorithms_server_to_client": [],
-        "languages_client_to_server": [],
-        "languages_server_to_client": [],
+    algo_lists_names = {
+        "kex_algorithms",
+        "server_host_key_algorithms",
+        "encryption_algorithms_client_to_server",
+        "encryption_algorithms_server_to_client",
+        "mac_algorithms_client_to_server",
+        "mac_algorithms_server_to_client",
+        "compression_algorithms_client_to_server",
+        "compression_algorithms_server_to_client",
+        "languages_client_to_server",
+        "languages_server_to_client",
     }
+
+    algo_lists_map = {}
 
     algo_lists_start = (
         PACKET_LEN_LEN +
@@ -38,13 +40,13 @@ def parse_algo_negotiation(data):
     )
 
     current_list_start = algo_lists_start
-    for algo_name in algo_lists.keys():
+    for algo_name in algo_lists_names:
         (algo_list_len, algo_list) = parse_name_list(data[current_list_start:])
         current_list_start += NAME_LIST_LEN_LEN + algo_list_len
-        algo_lists[algo_name] = algo_list
+        algo_lists_map[algo_name] = algo_list
 
 
-    print("Server algorithms:", algo_lists)
+    print("Server algorithms:", algo_lists_map)
 
 
 def run(rows, index_map):
