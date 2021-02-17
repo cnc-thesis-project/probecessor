@@ -1,40 +1,55 @@
 import struct
 
-def handle_string(data):
-    print(data[0:-2])
+NAME_LIST_LEN_LEN = 4
+PACKET_LEN_LEN = 4
+PADDING_LEN_LEN = 1
+MSG_KEXINIT_LEN = 1
+COOKIE_LEN = 16
 
-def handle_ciphers(data):
-    print(data)
-    print("\n")
-    # "constants"
-    packet_len_len = 4
-    padding_len_len = 1
-    kex_kexinit_len = 1
-    kex_cookie_len = 16
-    name_list_len_len = 4
+# Parses an SSH name-list as specified in RFC 4251
+def parse_name_list(nl):
+    nl_len = struct.unpack(">i", nl[0:NAME_LIST_LEN_LEN])[0]
+    return (nl_len, nl[NAME_LIST_LEN_LEN:NAME_LIST_LEN_LEN + nl_len].split(b","))
 
-    kex_list_start = (
-        packet_len_len +
-        padding_len_len +
-        kex_kexinit_len +
-        kex_cookie_len
+
+def parse_string(data):
+    print("Server string:", data[0:-2])
+
+
+def parse_algo_negotiation(data):
+    algo_lists = {
+        "kex_algorithms": [],
+        "server_host_key_algorithms": [],
+        "encryption_algorithms_client_to_server": [],
+        "encryption_algorithms_server_to_client": [],
+        "mac_algorithms_client_to_server": [],
+        "mac_algorithms_server_to_client": [],
+        "compression_algorithms_client_to_server": [],
+        "compression_algorithms_server_to_client": [],
+        "languages_client_to_server": [],
+        "languages_server_to_client": [],
+    }
+
+    algo_lists_start = (
+        PACKET_LEN_LEN +
+        PADDING_LEN_LEN +
+        MSG_KEXINIT_LEN +
+        COOKIE_LEN
     )
 
-    kex_list_len = struct.unpack(">i", data[kex_list_start:kex_list_start + name_list_len_len])[0]
+    current_list_start = algo_lists_start
+    for algo_name in algo_lists.keys():
+        (algo_list_len, algo_list) = parse_name_list(data[current_list_start:])
+        current_list_start += NAME_LIST_LEN_LEN + algo_list_len
+        algo_lists[algo_name] = algo_list
 
-    kex_list = data[kex_list_start + name_list_len_len:kex_list_start + name_list_len_len + kex_list_len].split(b",")
-    print("KEX list:", kex_list)
 
-    cipher_list_start = kex_list_start + name_list_len_len + kex_list_len
-    cipher_list_len = struct.unpack(">i", data[cipher_list_start:cipher_list_start + name_list_len_len])[0]
-    cipher_list = data[cipher_list_start + name_list_len_len:cipher_list_start + name_list_len_len + cipher_list_len].split(b",")
-    print("Cipher list:", cipher_list)
+    print("Server algorithms:", algo_lists)
+
 
 def run(rows, index_map):
     for row in rows:
         if row[index_map["type"]] == "string":
-            handle_string(row[index_map["data"]])
+            parse_string(row[index_map["data"]])
         elif row[index_map["type"]] == "ciphers":
-            handle_ciphers(row[index_map["data"]])
-        else:
-            print("UNKNOWN TYPE")
+            parse_algo_negotiation(row[index_map["data"]])
