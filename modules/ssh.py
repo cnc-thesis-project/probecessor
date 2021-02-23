@@ -55,7 +55,6 @@ def parse_algo_negotiation(data):
 
 
 def run(rows, index_map):
-    print("xDDDDDDDDd")
     for row in rows:
         if row[index_map["type"]] == "string":
             parse_string(row[index_map["data"]])
