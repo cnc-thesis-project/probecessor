@@ -9,6 +9,7 @@ COOKIE_LEN = 16
 # Parses an SSH name-list as specified in RFC 4251
 def parse_name_list(nl):
     nl_len = struct.unpack(">i", nl[0:NAME_LIST_LEN_LEN])[0]
+    print("Have name-list of {} size".format(nl_len))
     return (nl_len, nl[NAME_LIST_LEN_LEN:NAME_LIST_LEN_LEN + nl_len].split(b","))
 
 
@@ -17,7 +18,7 @@ def parse_string(data):
 
 
 def parse_algo_negotiation(data):
-    algo_lists_names = {
+    algo_lists_names = [
         "kex_algorithms",
         "server_host_key_algorithms",
         "encryption_algorithms_client_to_server",
@@ -28,7 +29,7 @@ def parse_algo_negotiation(data):
         "compression_algorithms_server_to_client",
         "languages_client_to_server",
         "languages_server_to_client",
-    }
+    ]
 
     algo_lists_map = {}
 
@@ -39,8 +40,12 @@ def parse_algo_negotiation(data):
         COOKIE_LEN
     )
 
+    packet_len = struct.unpack(">i", data[0:4])
+    print("Have SSH packet of length {}".format(packet_len))
+
     current_list_start = algo_lists_start
     for algo_name in algo_lists_names:
+        print("Handling algo list {}".format(algo_name))
         (algo_list_len, algo_list) = parse_name_list(data[current_list_start:])
         current_list_start += NAME_LIST_LEN_LEN + algo_list_len
         algo_lists_map[algo_name] = algo_list
@@ -50,6 +55,7 @@ def parse_algo_negotiation(data):
 
 
 def run(rows, index_map):
+    print("xDDDDDDDDd")
     for row in rows:
         if row[index_map["type"]] == "string":
             parse_string(row[index_map["data"]])
