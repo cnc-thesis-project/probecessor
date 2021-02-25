@@ -54,9 +54,9 @@ def parse_algo_negotiation(data):
     print("Server algorithms:", algo_lists_map)
 
 
-def run(rows, index_map):
+def run(rows):
     for row in rows:
-        if row[index_map["type"]] == "string":
-            parse_string(row[index_map["data"]])
-        elif row[index_map["type"]] == "ciphers":
-            parse_algo_negotiation(row[index_map["data"]])
+        if row["type"] == "string":
+            parse_string(row["data"])
+        elif row["type"] == "ciphers":
+            parse_algo_negotiation(row["data"])

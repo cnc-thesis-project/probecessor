@@ -12,6 +12,7 @@ if __name__ == "__main__":
     except:
         print("error: Failed opening database '{}'.".format(sys.argv[1]))
         sys.exit(1)
+    dbh.row_factory = sqlite3.Row
 
     c1 = dbh.cursor()
 
@@ -30,17 +31,15 @@ if __name__ == "__main__":
             c2 = dbh.cursor()
             c2.execute("SELECT * FROM Probe WHERE ip = ? AND port = ? AND name = ?", (ip,port,m,))
 
-            # get mapping of index -> column name
-            index_map = dict(zip(map(lambda x: x[0], c2.description), range(len(c2.description))))
-
             rows = c2.fetchall()
-            if not rows:
-                break
+
+            if not rows or len(rows) == 0:
+                continue
 
             mod = modules.modules.get(m)
             if not mod:
                 print("Processor module '{}' does not exist".format(m))
-                break
-            mod.run(rows, index_map)
+                continue
+            mod.run(rows)
 
     dbh.close()

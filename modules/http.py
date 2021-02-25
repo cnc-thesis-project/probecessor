@@ -33,25 +33,25 @@ def tag_recursive(element, depth=-1):
 
     return tag_str
 
-def get_type(rows, index_map, type):
+def get_type(rows, type):
     for row in rows:
-        if row[index_map["type"]] == type:
+        if row["type"] == type:
             return row
     return None
 
-def process_probe(row, index_map):
-    print("Request:", row[index_map["type"]])
+def process_probe(row):
+    print("Request:", row["type"])
 
     if row is None:
         return
 
-    if not row[index_map["data"]].startswith(b"HTTP/"):
+    if not row["data"].startswith(b"HTTP/"):
         print("error: Not a HTTP response")
         return
 
     try:
         # split in headers and content
-        raw_headers, content = row[index_map["data"]].split(b"\r\n\r\n", 1)
+        raw_headers, content = row["data"].split(b"\r\n\r\n", 1)
         request_line, headers_alone = raw_headers.split(b"\r\n", 1)
     except ValueError as e:
         print("error:", e)
@@ -92,15 +92,15 @@ def process_probe(row, index_map):
 
     return
 
-def run(rows, index_map):
+def run(rows):
     print("HTTP module handling probe")
 
-    process_probe(get_type(rows, index_map, "get_root"), index_map)
-    process_probe(get_type(rows, index_map, "head_root"), index_map)
-    process_probe(get_type(rows, index_map, "not_exist"), index_map)
-    process_probe(get_type(rows, index_map, "invalid_version"), index_map)
-    process_probe(get_type(rows, index_map, "invalid_protocol"), index_map)
-    process_probe(get_type(rows, index_map, "long_path"), index_map)
-    process_probe(get_type(rows, index_map, "get_favicon"), index_map)
-    process_probe(get_type(rows, index_map, "get_robots"), index_map)
-    process_probe(get_type(rows, index_map, "delete_root"), index_map)
+    process_probe(get_type(rows, "get_root"))
+    process_probe(get_type(rows, "head_root"))
+    process_probe(get_type(rows, "not_exist"))
+    process_probe(get_type(rows, "invalid_version"))
+    process_probe(get_type(rows, "invalid_protocol"))
+    process_probe(get_type(rows, "long_path"))
+    process_probe(get_type(rows, "get_favicon"))
+    process_probe(get_type(rows, "get_robots"))
+    process_probe(get_type(rows, "delete_root"))

@@ -1,5 +1,5 @@
-def run(rows, index_map):
+def run(rows):
     for row in rows:
-        parts = row[index_map["data"]].split(b".")
+        parts = row["data"].split(b".")
         tld = parts[len(parts)-1]
         print("TLD:", tld)
