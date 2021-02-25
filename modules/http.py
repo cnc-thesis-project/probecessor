@@ -2,6 +2,19 @@ from email.parser import BytesParser
 from lxml import html
 from lxml.etree import ParserError, Comment
 
+probe_types = [
+    "get_root",
+    "head_root",
+    "very_simple_get",
+    "not_exist",
+    "invalid_version",
+    "invalid_protocol",
+    "long_path",
+    "get_favicon",
+    "get_robots",
+    "delete_root"
+]
+
 def merge_chunks(chunks):
     content = b""
 
@@ -33,9 +46,9 @@ def tag_recursive(element, depth=-1):
 
     return tag_str
 
-def get_type(rows, type):
+def get_type(rows, probe_type):
     for row in rows:
-        if row["type"] == type:
+        if row["type"] == probe_type:
             return row
     return None
 
@@ -95,12 +108,12 @@ def process_probe(row):
 def run(rows):
     print("HTTP module handling probe")
 
-    process_probe(get_type(rows, "get_root"))
-    process_probe(get_type(rows, "head_root"))
-    process_probe(get_type(rows, "not_exist"))
-    process_probe(get_type(rows, "invalid_version"))
-    process_probe(get_type(rows, "invalid_protocol"))
-    process_probe(get_type(rows, "long_path"))
-    process_probe(get_type(rows, "get_favicon"))
-    process_probe(get_type(rows, "get_robots"))
-    process_probe(get_type(rows, "delete_root"))
+    for row in rows:
+        print(row["type"])
+
+    for probe_type in probe_types:
+        row = get_type(rows, probe_type)
+        if row is not None:
+            process_probe(row)
+        else:
+            print("HTTP Probe type not found:", probe_type)
