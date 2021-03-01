@@ -3,3 +3,4 @@ def run(rows):
         parts = row["data"].split(b".")
         tld = parts[len(parts)-1]
         print("TLD:", tld)
+        return tld

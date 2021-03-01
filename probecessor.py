@@ -4,11 +4,13 @@ import modules
 import pprint
 import tlsh
 import argparse
+import fingerprint
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
-    parser.add_argument("database", type=str, nargs="+")
+    parser.add_argument("--method", help="The fingerprinting method to use.", choices=["tlsh", "minhash"], default="tlsh")
+    parser.add_argument("database", help="A probeably database file.", type=str, nargs="+")
 
     args = parser.parse_args()
 
@@ -31,47 +33,41 @@ if __name__ == "__main__":
         while(True):
             ip_row = c1.fetchone()
             if not ip_row:
-                print("no ip row")
                 break
             ip = ip_row[0]
             port = ip_row[1]
-            print("Handling host {}:{}".format(ip, port))
 
             c2 = dbh.cursor()
             c2.execute("SELECT data FROM Probe WHERE name = 'port' AND type = 'open' AND ip = ? AND port = ?", (ip, port))
             rows = c2.fetchall()
             if len(rows) < 1 or rows is None:
-                print("No rows")
                 continue
             row = rows[0]
             m = row["data"].decode("utf-8")
             if m == "unknown":
-                print("Unknown protocol")
                 continue
-            print("Examining {}".format(m))
             c2 = dbh.cursor()
             c2.execute("SELECT * FROM Probe WHERE ip = ? AND port = ? AND name = ?", (ip,port,m,))
             rows = c2.fetchall()
 
             if not rows or len(rows) == 0:
-                print("No rows 2")
                 continue
 
             mod = modules.modules.get(m)
             if not mod:
-                print("Processor module '{}' does not exist".format(m))
                 continue
 
-            print("Mod:", mod)
             mod_data = mod.run(rows)
 
-            host_fps = fingerprints.get(ip)
-            if not host_fps:
-                host_fps = {}
-                fingerprints[ip] = host_fps
-            fingerprints[ip][port] = tlsh.hash(mod_data)
+            if not fingerprints.get(ip):
+                fingerprints[ip] = {}
+
+            if args.method == "tlsh":
+                fingerprints[ip][port] = fingerprint.tlsh.fp(data)
+            else:
+                fingerprints[ip][port] = fingerprint.minhash.fp(data)
 
         dbh.close()
 
-        print("+ FINGERPRINTS")
+        print("+ Fingerprints for host {}".format(ip))
         pprint.pprint(fingerprints)

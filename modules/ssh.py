@@ -9,12 +9,13 @@ COOKIE_LEN = 16
 # Parses an SSH name-list as specified in RFC 4251
 def parse_name_list(nl):
     nl_len = struct.unpack(">i", nl[0:NAME_LIST_LEN_LEN])[0]
-    print("Have name-list of {} size".format(nl_len))
+    #print("Have name-list of {} size".format(nl_len))
     return (nl_len, nl[NAME_LIST_LEN_LEN:NAME_LIST_LEN_LEN + nl_len].split(b","))
 
 
 def parse_string(data):
-    print("Server string:", data[0:-2])
+    #print("Server string:", data[0:-2])
+    return str(data[0:-2])
 
 
 def parse_algo_negotiation(data):
@@ -41,22 +42,25 @@ def parse_algo_negotiation(data):
     )
 
     packet_len = struct.unpack(">i", data[0:4])
-    print("Have SSH packet of length {}".format(packet_len))
+    #print("Have SSH packet of length {}".format(packet_len))
 
     current_list_start = algo_lists_start
     for algo_name in algo_lists_names:
-        print("Handling algo list {}".format(algo_name))
+        #print("Handling algo list {}".format(algo_name))
         (algo_list_len, algo_list) = parse_name_list(data[current_list_start:])
         current_list_start += NAME_LIST_LEN_LEN + algo_list_len
         algo_lists_map[algo_name] = algo_list
 
 
-    print("Server algorithms:", algo_lists_map)
+    #print("Server algorithms:", algo_lists_map)
+    return str(algo_lists_map)
 
 
 def run(rows):
+    data = ""
     for row in rows:
         if row["type"] == "string":
-            parse_string(row["data"])
+            data += parse_string(row["data"])
         elif row["type"] == "ciphers":
-            parse_algo_negotiation(row["data"])
+            data += parse_algo_negotiation(row["data"])
+    return data.encode()

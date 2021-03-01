@@ -53,14 +53,14 @@ def get_type(rows, probe_type):
     return None
 
 def process_probe(row):
-    print("Request:", row["type"])
+    #print("Request:", row["type"])
 
     if row is None:
-        return
+        return ""
 
     if not row["data"].startswith(b"HTTP/"):
-        print("error: Not a HTTP response")
-        return
+    #    print("error: Not a HTTP response")
+        return ""
 
     try:
         # split in headers and content
@@ -68,7 +68,7 @@ def process_probe(row):
         request_line, headers_alone = raw_headers.split(b"\r\n", 1)
     except ValueError as e:
         print("error:", e)
-        return
+        return ""
 
     # parse first line
     protocol, status_code, status_text = request_line.split(b" ", 2)
@@ -77,9 +77,9 @@ def process_probe(row):
     # get headers
     headers = BytesParser().parsebytes(headers_alone)
 
-    server = headers.get("Server", None)
-    date = headers.get("Date", None)
-    content_type = headers.get("Content-Type", None)
+    server = headers.get("Server", "")
+    date = headers.get("Date", "")
+    content_type = headers.get("Content-Type", "")
     transfer_encoding = list(map(lambda s: s.strip(), headers.get("Transfer-Encoding", "").split(",")))
 
     if "chunked" in transfer_encoding:
@@ -94,6 +94,7 @@ def process_probe(row):
     except ParserError as e:
         print("error:", e)
 
+    """
     print(protocol, version, status_code, status_text)
     print("Headers:", ", ".join(headers.keys()))
     print("Server:", server)
@@ -102,18 +103,26 @@ def process_probe(row):
     print("Transfer-Encoding:", transfer_encoding)
     print("Content-Length (in db):", len(content))
     print("DOM tree:", tag_tree)
+    """
 
-    return
+    data = ""
+
+    data += "\n".join(headers.keys())
+    data += server
+    data += date
+    data += content_type
+    data += str(transfer_encoding)
+    data += tag_tree if tag_tree is not None else ""
+
+    return data
 
 def run(rows):
-    print("HTTP module handling probe")
-
-    for row in rows:
-        print(row["type"])
+    data = ""
 
     for probe_type in probe_types:
         row = get_type(rows, probe_type)
         if row is not None:
-            process_probe(row)
+            data += process_probe(row)
         else:
             print("HTTP Probe type not found:", probe_type)
+    return data.encode()
