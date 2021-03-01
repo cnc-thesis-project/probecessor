@@ -1,2 +1,4 @@
+import tlsh
+
 def fp(data):
-    pass
+    return tlsh.hash(data)

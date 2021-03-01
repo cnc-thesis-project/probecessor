@@ -14,6 +14,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    data = {}
     for db_file in args.database:
         try:
             open(db_file, "r")
@@ -27,8 +28,6 @@ if __name__ == "__main__":
         c1 = dbh.cursor()
 
         c1.execute("SELECT DISTINCT ip, port FROM Probe;")
-
-        fingerprints = {}
 
         while(True):
             ip_row = c1.fetchone()
@@ -59,15 +58,23 @@ if __name__ == "__main__":
 
             mod_data = mod.run(rows)
 
-            if not fingerprints.get(ip):
-                fingerprints[ip] = {}
+            if not data.get(ip):
+                data[ip] = {}
 
+            data[ip][port] = mod_data
+
+
+    fingerprints = {}
+    for ip in data.keys():
+        if not fingerprints.get(ip):
+            fingerprints[ip] = {}
+        for port in data[ip].keys():
             if args.method == "tlsh":
-                fingerprints[ip][port] = fingerprint.tlsh.fp(data)
+                fingerprints[ip][port] = fingerprint.tlsh.fp(data[ip][port])
             else:
-                fingerprints[ip][port] = fingerprint.minhash.fp(data)
+                fingerprints[ip][port] = fingerprint.minhash.fp(data[ip][port])
 
-        dbh.close()
+    dbh.close()
 
-        print("+ Fingerprints for host {}".format(ip))
-        pprint.pprint(fingerprints)
+    print("+ Fingerprints for host {}".format(ip))
+    pprint.pprint(fingerprints)
