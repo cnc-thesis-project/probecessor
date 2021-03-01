@@ -8,11 +8,11 @@ import argparse
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
-    parser.add_argument("databases", type=str, nargs="+")
+    parser.add_argument("database", type=str, nargs="+")
 
     args = parser.parse_args()
 
-    for db_file in args.databases:
+    for db_file in args.database:
         try:
             open(db_file, "r")
             dbh = sqlite3.connect(db_file)
