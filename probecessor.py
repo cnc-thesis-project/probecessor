@@ -9,12 +9,14 @@ import fingerprint
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
-    parser.add_argument("--method", help="The fingerprinting method to use.", choices=["tlsh", "minhash"], default="tlsh")
+    parser.add_argument("--method", help="The fingerprinting method to use.", choices=["tlsh", "minhash", "rules"], default="rules")
     parser.add_argument("database", help="A probeably database file.", type=str, nargs="+")
 
     args = parser.parse_args()
 
     data = {}
+
+    """
     for db_file in args.database:
         try:
             open(db_file, "r")
@@ -54,14 +56,28 @@ if __name__ == "__main__":
                     data[ip] = {}
 
                 data[ip][port] = mod_data
+    """
 
+
+    data["192.123.123.123"] = {
+        80: {
+            "module": "http",
+            "features": {
+                "delete_response_code": 200,
+                "get_response_code": 200,
+                ""
+            }
+        }
+    }
 
     fingerprints = {}
     for ip in data.keys():
         if not fingerprints.get(ip):
             fingerprints[ip] = {}
         for port in data[ip].keys():
-            if args.method == "tlsh":
+            if args.method == "rules":
+                fingerprints[ip][port] = fingerprint.rules.fp(data[ip][port])
+            elif args.method == "tlsh":
                 fingerprints[ip][port] = fingerprint.tlsh.fp(data[ip][port])
             else:
                 fingerprints[ip][port] = fingerprint.minhash.fp(data[ip][port])
