@@ -36,32 +36,24 @@ if __name__ == "__main__":
             ip = ip_row[0]
             port = ip_row[1]
 
-            c2 = dbh.cursor()
-            c2.execute("SELECT data FROM Probe WHERE name = 'port' AND type = 'open' AND ip = ? AND port = ?", (ip, port))
-            rows = c2.fetchall()
-            if len(rows) < 1 or rows is None:
-                continue
-            row = rows[0]
-            m = row["data"].decode("utf-8")
-            if m == "unknown":
-                continue
-            c2 = dbh.cursor()
-            c2.execute("SELECT * FROM Probe WHERE ip = ? AND port = ? AND name = ?", (ip,port,m,))
-            rows = c2.fetchall()
+            for m in modules.modules.keys():
+                c2 = dbh.cursor()
+                c2.execute("SELECT * FROM Probe WHERE ip = ? AND port = ? AND name = ?", (ip,port,m,))
+                rows = c2.fetchall()
 
-            if not rows or len(rows) == 0:
-                continue
+                if not rows or len(rows) == 0:
+                    continue
 
-            mod = modules.modules.get(m)
-            if not mod:
-                continue
+                mod = modules.modules.get(m)
+                if not mod:
+                    continue
 
-            mod_data = mod.run(rows)
+                mod_data = mod.run(rows)
 
-            if not data.get(ip):
-                data[ip] = {}
+                if not data.get(ip):
+                    data[ip] = {}
 
-            data[ip][port] = mod_data
+                data[ip][port] = mod_data
 
 
     fingerprints = {}

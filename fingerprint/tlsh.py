@@ -1,4 +1,7 @@
 import tlsh
 
 def fp(data):
-    return tlsh.hash(data)
+    if len(data) > 50:
+        return tlsh.hash(data)
+    else:
+        return data
