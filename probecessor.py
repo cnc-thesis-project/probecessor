@@ -7,6 +7,37 @@ import tlsh
 import argparse
 import fingerprint
 
+def dict_add_prefix(d, prefix):
+    return {prefix +  ":" + k: v for (k, v) in d.items()}
+
+def populate_statistics(ip_data):
+    ip_data["stats"] = {}
+    # nr of no response at all from server port
+    ip_data["stats"]["no_response"] = 0
+    # nr of (un)identifiable port service
+    # note: port with no response is not counted in unknown
+    ip_data["stats"]["known"] = 0
+    ip_data["stats"]["unknown"] = 0
+    # nr of open ports
+    ip_data["stats"]["open_ports"] = len(ip_data["port"])
+    # nr of ports with tls
+    ip_data["stats"]["tls"] = 0
+    # TODO: uses the expected port for the service
+    expected_port = 0
+
+    for port in ip_data["port"]:
+        if len(ip_data["port"][port]) == 0:
+            ip_data["stats"]["no_response"] += 1
+        elif ip_data["port"][port]["name"] == "unknown":
+            ip_data["stats"]["unknown"] += 1
+        else:
+            ip_data["stats"]["known"] += 1
+
+        if ip_data["port"][port].get("tls", False):
+            ip_data["stats"]["tls"] += 1
+
+    print(ip_data["stats"])
+
 def database_extract(output, database):
     print("Extract")
     data = {}
@@ -40,7 +71,7 @@ def database_extract(output, database):
                     break
 
                 name = probe["name"]
-                port = probe["port"]
+                port = str(probe["port"]) # store as string since json cannot have integer key anyways
 
                 if not port in probe_map:
                     probe_map[port] = {}
@@ -52,9 +83,9 @@ def database_extract(output, database):
 
             for port in probe_map:
                 if not data.get(ip):
-                    data[ip] = {}
+                    data[ip] = {"port": {}}
 
-                if port == 0:
+                if port == "0":
                     # ip module stuff
                     # TODO: use ip module processor?
                     for m in probe_map[port]:
@@ -64,16 +95,29 @@ def database_extract(output, database):
                         else:
                             data[ip][m] = probe_map[port][m][0]["data"].decode()
                     continue
-                # TODO: handle name: port, unknown
+
+                # TODO: handle name: port
+                if port not in data[ip]["port"]:
+                    data[ip]["port"][port] = {}
                 for m in probe_map[port]:
                     # module stuff
                     mod = modules.modules.get(m)
                     if not mod:
                         continue
 
-                    data[ip][port] = mod.run(probe_map[port][m])
+                    mod_data = dict_add_prefix(mod.run(probe_map[port][m]), m)
+                    data[ip]["port"][port].update(mod_data)
+                    if m != "tls":
+                        data[ip]["port"][port]["name"] = m
+                        data[ip]["port"][port]["tls"] = data[ip]["port"][port].get("tls", m == "tls")
+                    else:
+                        data[ip]["port"][port]["tls"] = True
 
         c1.close()
+
+    for ip in data:
+        print(ip)
+        populate_statistics(data[ip])
 
     with open(output, "w") as f:
         json.dump(data, f)
