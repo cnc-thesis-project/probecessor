@@ -60,9 +60,9 @@ def run(rows):
     data = {}
     for row in rows:
         if row["type"] == "string":
-            data["ssh:server"] = parse_string(row["data"])
+            data["server"] = parse_string(row["data"])
         elif row["type"] == "ciphers":
             algorithms = parse_algo_negotiation(row["data"])
             for key in algorithms:
-                data["ssh:ciphers:{}".format(key)] = algorithms[key]
+                data["ciphers:{}".format(key)] = algorithms[key]
     return data

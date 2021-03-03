@@ -101,7 +101,7 @@ def process_probe(row):
 
     data = {}
 
-    probe_type = "http:" + row["type"]
+    probe_type = row["type"]
 
     data["{}_headers".format(probe_type)] = headers.keys()
     for header in headers:
