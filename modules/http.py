@@ -103,6 +103,8 @@ def process_probe(row):
 
     probe_type = row["type"]
 
+    data["{}_status_code".format(probe_type)] = int(status_code)
+    data["{}_status_text".format(probe_type)] = status_text.decode()
     data["{}_headers".format(probe_type)] = headers.keys()
     for header in headers:
         data["{}:header:{}".format(probe_type, header)] = headers[header]
@@ -117,5 +119,11 @@ def run(rows):
         row = get_type(rows, probe_type)
         if row is not None:
             data.update(process_probe(row))
+
+            # timing related
+            response_time = get_type(rows, probe_type + "_time")["data"].split(b" ")
+            data["{}_response_start".format(probe_type)] = float(response_time[0])
+            data["{}_response_end".format(probe_type)] = float(response_time[0])
+
 
     return data
