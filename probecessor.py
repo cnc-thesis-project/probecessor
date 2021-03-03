@@ -115,9 +115,23 @@ def database_extract(output, database):
 
         c1.close()
 
+    remove_ip = []
     for ip in data:
+        if len(data[ip]["port"]) == 0:
+            # TODO: add a flag that decides whether to exclude this or not
+            print("{}: No ports open, omitting".format(ip))
+            remove_ip.append(ip)
+            continue
+        if sum(map(len, data[ip]["port"].values())) == 0:
+            # TODO: add a flag that decides whether to exclude this or not
+            print("{}: No ports responded, omitting".format(ip))
+            remove_ip.append(ip)
+            continue
         print(ip)
         populate_statistics(data[ip])
+
+    for ip in remove_ip:
+        del data[ip]
 
     with open(output, "w") as f:
         json.dump(data, f)
