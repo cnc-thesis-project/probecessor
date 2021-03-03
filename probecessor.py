@@ -46,7 +46,7 @@ def database_extract(output, database):
             open(db_file, "r")
             dbh = sqlite3.connect(db_file)
         except:
-            print("error: Failed opening database '{}'.".format(sys.argv[1]))
+            print("error: Failed opening database '{}'.".format(db_file))
             sys.exit(1)
 
         dbh.row_factory = sqlite3.Row
@@ -142,8 +142,8 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers(help='sub-command help', dest="subcommand")
     # sub-command extract
     parser_extract = subparsers.add_parser("extract", help="Extract data from database file.")
-    parser_extract.add_argument("output", help="Processed output file.", type=str)
     parser_extract.add_argument("database", help="A probeably database file.", type=str, nargs="+")
+    parser_extract.add_argument("output", help="Processed output file.", type=str)
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from processed file.")
     parser_fingerprint.add_argument("input", help="Processed output file.", type=str, nargs="+")
