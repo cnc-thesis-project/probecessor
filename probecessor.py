@@ -2,11 +2,12 @@ import sys
 import sqlite3
 import modules
 import pprint
+import json
 import tlsh
 import argparse
 import fingerprint
 
-def database_extract(database):
+def database_extract(output, database):
     print("Extract")
     data = {}
     for db_file in database:
@@ -63,8 +64,7 @@ def database_extract(database):
                         else:
                             data[ip][m] = probe_map[port][m][0]["data"].decode()
                     continue
-                # TODO: handle port, unknown
-
+                # TODO: handle name: port, unknown
                 for m in probe_map[port]:
                     # module stuff
                     mod = modules.modules.get(m)
@@ -75,7 +75,10 @@ def database_extract(database):
 
         c1.close()
 
-    pprint.pprint(data)
+    with open(output, "w") as f:
+        json.dump(data, f)
+
+    #pprint.pprint(data)
 
     """fingerprints = {}
     for ip in data.keys():
@@ -108,7 +111,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.subcommand == "extract":
-        database_extract(args.database)
+        database_extract(args.output, args.database)
     elif args.subcommand == "fingerprint":
         # TODO: this code is no longer relevant, nuke it
         data = {}
@@ -167,3 +170,4 @@ if __name__ == "__main__":
 
         print("+ Fingerprints for host {}".format(ip))
         pprint.pprint(fingerprints)
+
