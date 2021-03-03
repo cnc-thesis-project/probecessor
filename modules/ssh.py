@@ -10,7 +10,7 @@ COOKIE_LEN = 16
 def parse_name_list(nl):
     nl_len = struct.unpack(">i", nl[0:NAME_LIST_LEN_LEN])[0]
     #print("Have name-list of {} size".format(nl_len))
-    return (nl_len, nl[NAME_LIST_LEN_LEN:NAME_LIST_LEN_LEN + nl_len].split(b","))
+    return (nl_len, map(bytes.decode, nl[NAME_LIST_LEN_LEN:NAME_LIST_LEN_LEN + nl_len].split(b",")))
 
 
 def parse_string(data):
@@ -53,14 +53,17 @@ def parse_algo_negotiation(data):
 
 
     #print("Server algorithms:", algo_lists_map)
-    return str(algo_lists_map)
-
+    data = ""
+    for name, algos in algo_lists_map.items():
+        for algo in algos:
+            data += " " + name + ":" + algo
+    return data
 
 def run(rows):
     data = ""
     for row in rows:
         if row["type"] == "string":
-            data += parse_string(row["data"])
+            data += " " + parse_string(row["data"])
         elif row["type"] == "ciphers":
             data += parse_algo_negotiation(row["data"])
     return data.encode()

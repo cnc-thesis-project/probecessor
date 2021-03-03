@@ -105,24 +105,30 @@ def process_probe(row):
     print("DOM tree:", tag_tree)
     """
 
-    data = ""
+    vec = {}
 
-    data += "\n".join(headers.keys())
-    data += server
-    data += date
-    data += content_type
-    data += str(transfer_encoding)
-    data += tag_tree if tag_tree is not None else ""
+    vec[row["type"] + "_header_keys"] = headers.keys()
+    vec[row["type"] + "_response_code"] = int(status_code)
+    #data += " " + server
+    #data += " " + date
+    #data += " " + content_type
+    #data += " " + " ".join(transfer_encoding)
+    #data += " " + tag_tree if tag_tree is not None else " "
+
+    data = {
+        "module": "http",
+        "features": vec,
+    }
 
     return data
 
 def run(rows):
-    data = ""
+    data = {}
 
     for probe_type in probe_types:
         row = get_type(rows, probe_type)
         if row is not None:
-            data += process_probe(row)
+            data.update(process_probe(row))
         else:
             print("HTTP Probe type not found:", probe_type)
-    return data.encode()
+    return data

@@ -4,6 +4,6 @@ import modules.rdns
 
 modules = {
     "http": modules.http,
-    "ssh": modules.ssh,
-    "rdns": modules.rdns,
+#    "ssh": modules.ssh,
+#    "rdns": modules.rdns,
 }
