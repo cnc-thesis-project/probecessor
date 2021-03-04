@@ -149,7 +149,6 @@ def database_extract(output, database):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
-    parser.add_argument("--method", help="The fingerprinting method to use.", choices=["tlsh", "minhash"], default="tlsh")
     subparsers = parser.add_subparsers(help='sub-command help', dest="subcommand")
     # sub-command extract
     parser_extract = subparsers.add_parser("extract", help="Extract data from database file.")
@@ -158,6 +157,7 @@ if __name__ == "__main__":
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from processed file.")
     parser_fingerprint.add_argument("input", help="Processed output file.", type=str, nargs="+")
+    parser_fingerprint.add_argument("--method", help="Method to use.", type=str, choices=["learn"])
     # sub-command classify
     # TODO: WIP
     parser_fingerprint = subparsers.add_parser("classify", help="Classify a host.")
