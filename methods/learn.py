@@ -43,6 +43,20 @@ vector_descs = {
         { "name": "head_root_response_code", "norm": _normalize_response_code },
         { "name": "delete_root_header_keys", "norm": _normalize_header_keys },
         { "name": "delete_root_response_code", "norm": _normalize_response_code },
+        { "name": "very_simple_get_header_keys", "norm": _normalize_header_keys },
+        { "name": "very_simple_get_response_code", "norm": _normalize_response_code },
+        { "name": "not_exist_header_keys", "norm": _normalize_header_keys },
+        { "name": "not_exist_response_code", "norm": _normalize_response_code },
+        { "name": "invalid_version_header_keys", "norm": _normalize_header_keys },
+        { "name": "invalid_version_response_code", "norm": _normalize_response_code },
+        { "name": "invalid_protocol_header_keys", "norm": _normalize_header_keys },
+        { "name": "invalid_protocol_response_code", "norm": _normalize_response_code },
+        { "name": "long_path_header_keys", "norm": _normalize_header_keys },
+        { "name": "long_path_response_code", "norm": _normalize_response_code },
+        { "name": "get_favicon_header_keys", "norm": _normalize_header_keys },
+        { "name": "get_favicon_response_code", "norm": _normalize_response_code },
+        { "name": "get_robots_header_keys", "norm": _normalize_header_keys },
+        { "name": "get_robots_response_code", "norm": _normalize_response_code },
     ],
     "ssh": {
     },
@@ -67,7 +81,7 @@ def add(host_data):
                 vec.extend(feat["norm"](data["features"][feat["name"]]))
 
         # TODO: fix
-        if len(vec) != 18:
+        if len(vec) != 60:
             continue
 
         print("added vector of len {}:".format(len(vec)), vec)
@@ -75,7 +89,7 @@ def add(host_data):
 
 
 def process():
-    pprint(module_X)
+    pprint(module_X, width=1000)
 
     for m, X in module_X.items():
         if len(X) == 0:
