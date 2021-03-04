@@ -5,6 +5,8 @@ import pprint
 import json
 import argparse
 import methods
+import fingerprint
+import re
 
 def populate_statistics(ip_data):
     ip_data["stats"] = {}
@@ -148,6 +150,79 @@ def database_extract(output, database, label_path):
 
     dbh.close()
 
+def stringify_dict_keys(d, prefix="", separator="/", start_regex=re.compile("")):
+    keys = set()
+
+    for k in d:
+        new_prefix = prefix + separator + k
+        if isinstance(d[k], dict):
+            keys.update(stringify_dict_keys(d[k], new_prefix, separator, start_regex))
+        else:
+            match = start_regex.match(new_prefix)
+            if match is None:
+                continue
+            keys.add(new_prefix[match.span()[1]:])
+
+    return keys
+
+def print_statistic(input):
+    with open(input, "r") as f:
+        data = json.load(f)
+
+    # things to print: average port stats, % of hosts having "..." module, rdns, key stat
+    ip_len = len(data)
+    print("Hosts: {}".format(ip_len))
+    for key in data[list(data.keys())[0]]["stats"]:
+        value_sum = sum(map(lambda ip: data[ip]["stats"][key], data))
+        print("{}: {}, average per host: {}".format(key, value_sum, (value_sum/ip_len)))
+
+    port_stat = [{"port": i, "count": 0} for i in range(65536)]
+    for ip in data:
+        for port in data[ip]["port"]:
+            port_stat[int(port)]["count"] += 1
+
+    print("\nPort statistics - Top ~20")
+    port_stat = sorted(port_stat, key=lambda k: k["count"], reverse=True)
+    for p in port_stat[:20]:
+        if p["count"] == 0:
+            break
+
+        print("Port {}: {} hosts".format(p["port"], p["count"]))
+
+    module_keys = stringify_dict_keys(data, start_regex=re.compile("^/[0-9.]*/port/[0-9]*/"))
+    data_stats = {}
+    for keys in module_keys:
+        data_stats[keys] = {"count": 0, "unique": 0, "value": {}}
+        for ip in data:
+            key_unique = set()
+            value_unique = set()
+            for port in data[ip]["port"]:
+                d = data[ip]["port"][port]
+                for k in keys.split("/"):
+                    d = d.get(k)
+                    if not d:
+                        break
+                if not d:
+                    continue
+                data_stats[keys]["count"] += 1
+                if not keys in key_unique:
+                    key_unique.add(keys)
+                    data_stats[keys]["unique"] += 1
+
+                if isinstance(d, list):
+                    continue
+                if not d in data_stats[keys]["value"]:
+                    data_stats[keys]["value"][d] = {"count": 0, "unique": 0}
+                data_stats[keys]["value"][d]["count"] += 1
+                if not (keys + "/" + str(d)) in value_unique:
+                    value_unique.add(keys + "/" + str(d))
+                    data_stats[keys]["value"][d]["unique"] += 1
+    pprint.pprint(data_stats)
+    print("Module statistics:")
+    #for m in modules.modules.keys():
+    #    print("{}: {} ports found totally".format(m, data_stats["name"][m]))
+    return
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
     subparsers = parser.add_subparsers(help='sub-command help', dest="subcommand")
@@ -161,8 +236,10 @@ if __name__ == "__main__":
     parser_fingerprint.add_argument("input", help="Processed output file.", type=str)
     parser_fingerprint.add_argument("output", help="Output file for storing the fingerprints.", type=str)
     parser_fingerprint.add_argument("--method", help="Method to use.", type=str, default="learn", choices=["learn"])
-    # sub-command match
-    # TODO: WIP
+    # sub-command statistic
+    parser_statistic = subparsers.add_parser("statistic", help="Print statistics from extracted data.")
+    parser_statistic.add_argument("input", help="Processed output file.", type=str)
+    # sub-command classify
     parser_classify = subparsers.add_parser("classify", help="Classify a host.")
     parser_classify.add_argument("fingerprints", help="Fingerprints to use for classifying.", type=str)
     parser_classify.add_argument("--method", help="Method to use.", type=str, default="learn", choices=["learn", "rules"])
@@ -172,6 +249,8 @@ if __name__ == "__main__":
 
     if args.subcommand == "extract":
         database_extract(args.output, args.database, args.label)
+    elif args.subcommand == "statistic":
+        print_statistic(args.input)
     elif args.subcommand == "fingerprint":
         data = {}
 
