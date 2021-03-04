@@ -107,10 +107,12 @@ def database_extract(output, database):
 
                     mod_data = dict_add_prefix(mod.run(probe_map[port][m]), m)
                     data[ip]["port"][port].update(mod_data)
+                    # TODO: fix so it doesn't need this shitty check, all modules should be treated equally!!!
                     if m != "tls":
                         data[ip]["port"][port]["name"] = m
                         data[ip]["port"][port]["tls"] = data[ip]["port"][port].get("tls", m == "tls")
                     else:
+                        data[ip]["port"][port]["name"] = data[ip]["port"][port].get("name", "unknown")
                         data[ip]["port"][port]["tls"] = True
 
         c1.close()
