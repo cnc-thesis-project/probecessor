@@ -53,14 +53,8 @@ def get_type(rows, probe_type):
     return None
 
 def process_probe(row):
-    #print("Request:", row["type"])
-
-    if row is None:
-        return ""
-
     if not row["data"].startswith(b"HTTP/"):
-    #    print("error: Not a HTTP response")
-        return ""
+        return {} # TODO: do some kind of content analysis
 
     try:
         # split in headers and content
@@ -68,7 +62,7 @@ def process_probe(row):
         request_line, headers_alone = raw_headers.split(b"\r\n", 1)
     except ValueError as e:
         print("error:", e)
-        return ""
+        return {}
 
     # parse first line
     protocol, status_code, status_text = request_line.split(b" ", 2)
@@ -87,12 +81,12 @@ def process_probe(row):
         content = merge_chunks(content)
 
     # parse html
-    tag_tree = None
+    tag_tree = ""
     try:
         tree = html.fromstring(content)
         tag_tree = tag_recursive(tree)
     except ParserError as e:
-        print("error:", e)
+        pass
 
     """
     print(protocol, version, status_code, status_text)
@@ -105,24 +99,30 @@ def process_probe(row):
     print("DOM tree:", tag_tree)
     """
 
-    data = ""
+    data = {}
 
-    data += "\n".join(headers.keys())
-    data += server
-    data += date
-    data += content_type
-    data += str(transfer_encoding)
-    data += tag_tree if tag_tree is not None else ""
+    probe_type = row["type"]
+
+    data["{}:status_code".format(probe_type)] = int(status_code)
+    data["{}:status_text".format(probe_type)] = status_text.decode()
+    data["{}:headers".format(probe_type)] = headers.keys()
+    for header in headers:
+        data["{}:header:{}".format(probe_type, header)] = headers[header]
+    data["{}:dom_tree".format(probe_type)] = tag_tree
 
     return data
 
 def run(rows):
-    data = ""
+    data = {}
 
     for probe_type in probe_types:
         row = get_type(rows, probe_type)
         if row is not None:
-            data += process_probe(row)
-        else:
-            print("HTTP Probe type not found:", probe_type)
-    return data.encode()
+            data.update(process_probe(row))
+
+            # timing related
+            response_time = get_type(rows, probe_type + "_time")["data"].split(b" ")
+            data["{}:response_start".format(probe_type)] = float(response_time[0])
+            data["{}:response_end".format(probe_type)] = float(response_time[0])
+
+    return data

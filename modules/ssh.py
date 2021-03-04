@@ -15,7 +15,7 @@ def parse_name_list(nl):
 
 def parse_string(data):
     #print("Server string:", data[0:-2])
-    return str(data[0:-2])
+    return data.rstrip(b"\r\n").decode()
 
 
 def parse_algo_negotiation(data):
@@ -49,18 +49,20 @@ def parse_algo_negotiation(data):
         #print("Handling algo list {}".format(algo_name))
         (algo_list_len, algo_list) = parse_name_list(data[current_list_start:])
         current_list_start += NAME_LIST_LEN_LEN + algo_list_len
-        algo_lists_map[algo_name] = algo_list
+        algo_lists_map[algo_name] = list(map(lambda s: s.decode(), algo_list))
 
 
     #print("Server algorithms:", algo_lists_map)
-    return str(algo_lists_map)
+    return algo_lists_map
 
 
 def run(rows):
-    data = ""
+    data = {}
     for row in rows:
         if row["type"] == "string":
-            data += parse_string(row["data"])
+            data["server"] = parse_string(row["data"])
         elif row["type"] == "ciphers":
-            data += parse_algo_negotiation(row["data"])
-    return data.encode()
+            algorithms = parse_algo_negotiation(row["data"])
+            for key in algorithms:
+                data["ciphers:{}".format(key)] = algorithms[key]
+    return data
