@@ -53,14 +53,16 @@ def get_type(rows, probe_type):
     return None
 
 def process_probe(row):
-    #print("Request:", row["type"])
+    vec = {}
+    vec[row["type"] + "_header_keys"] = []
+    vec[row["type"] + "_response_code"] = -1
 
     if row is None:
-        return ""
+        return vec
 
     if not row["data"].startswith(b"HTTP/"):
     #    print("error: Not a HTTP response")
-        return ""
+        return vec
 
     try:
         # split in headers and content
@@ -68,7 +70,7 @@ def process_probe(row):
         request_line, headers_alone = raw_headers.split(b"\r\n", 1)
     except ValueError as e:
         print("error:", e)
-        return ""
+        return vec
 
     # parse first line
     protocol, status_code, status_text = request_line.split(b" ", 2)
@@ -105,8 +107,6 @@ def process_probe(row):
     print("DOM tree:", tag_tree)
     """
 
-    vec = {}
-
     vec[row["type"] + "_header_keys"] = headers.keys()
     vec[row["type"] + "_response_code"] = int(status_code)
     #data += " " + server
@@ -115,20 +115,24 @@ def process_probe(row):
     #data += " " + " ".join(transfer_encoding)
     #data += " " + tag_tree if tag_tree is not None else " "
 
-    data = {
-        "module": "http",
-        "features": vec,
-    }
-
-    return data
+    return vec
 
 def run(rows):
-    data = {}
+    data = {
+        "module": "http",
+        "features": {
+            "get_response_code": -1,
+            "delete_response_code": -1,
+            "get_root_header_keys": [],
+            "delete_root_header_keys": [],
+        },
+    }
 
     for probe_type in probe_types:
         row = get_type(rows, probe_type)
         if row is not None:
-            data.update(process_probe(row))
+            data["features"].update(process_probe(row))
         else:
             print("HTTP Probe type not found:", probe_type)
+    print("Returning HTTP data:", data)
     return data
