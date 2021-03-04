@@ -1,15 +1,16 @@
 import sys
 import sqlite3
-import modules
 import pprint
 import tlsh
 import argparse
+
 import methods
+import modules
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
-    parser.add_argument("--method", help="The fingerprinting method to use.", choices=["minhash", "learn"], default="learn")
+    parser.add_argument("--method", help="The fingerprinting method to use.", choices=["rules", "learn"], default="learn")
     parser.add_argument("database", help="A probeably database file.", type=str, nargs="+")
 
     args = parser.parse_args()
@@ -56,9 +57,11 @@ if __name__ == "__main__":
 
                 data[ip][port] = mod_data
 
+    method = methods.methods[args.method]
+
     for ip in data.keys():
-        methods.learn.add(data[ip])
+        method.add(data[ip])
 
     dbh.close()
 
-    methods.learn.train()
+    method.process()

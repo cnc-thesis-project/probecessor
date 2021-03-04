@@ -10,40 +10,48 @@ module_X = {
 
 module_clusterings = {}
 
-vector_descs = {
-    "http": {
-        "lists": {
-            "get_root_header_keys": {
-                "Server": 0,
-                "Content-Type": 1,
-                "Date": 2,
-                "Content-Length": 3,
-                "Connection": 4,
-            },
-            "delete_root_header_keys": {
-                "Server": 0,
-                "Content-Type": 1,
-                "Date": 2,
-                "Content-Length": 3,
-                "Connection": 4,
-            },
-        },
-        "vector": [
-            "get_root_header_keys",
-            "delete_root_header_keys",
-            "get_root_response_code",
-            "delete_root_response_code",
-        ],
-    },
-    "ssh": {
-        "lists": {},
-        "vector": {},
+
+def list_to_order_list(li, desc):
+    res = [-1 for i in range(len(desc.values()))]
+    for i in range(len(li)):
+        if li[i] in desc.keys():
+            res[desc[li[i]]] = i
+    return res
+
+
+def _normalize_response_code(code):
+    return [code/100]
+
+
+def _normalize_header_keys(headers):
+    header_keys = {
+        "Server": 0,
+        "Content-Type": 1,
+        "Date": 2,
+        "Content-Length": 3,
+        "Connection": 4,
     }
+
+    return list_to_order_list(headers, header_keys)
+
+
+vector_descs = {
+    "http": [
+        { "name": "get_root_header_keys", "norm": _normalize_header_keys },
+        { "name": "get_root_response_code", "norm": _normalize_response_code },
+        { "name": "head_root_header_keys", "norm": _normalize_header_keys },
+        { "name": "head_root_response_code", "norm": _normalize_response_code },
+        { "name": "delete_root_header_keys", "norm": _normalize_header_keys },
+        { "name": "delete_root_response_code", "norm": _normalize_response_code },
+    ],
+    "ssh": {
+    },
 }
 
 
 def get_vector(host_data):
     pass
+
 
 # Add training data
 def add(host_data):
@@ -52,27 +60,21 @@ def add(host_data):
         if data["module"] != "http":
             continue
 
-
         vec = []
         desc = vector_descs[data["module"]]
-        for el in desc["vector"]:
-            if el in data["features"]:
-                if el in desc["lists"]:
-                    vec.extend(list_to_order_list(data["features"][el], desc["lists"][el]))
-                else:
-                    vec.append(data["features"][el]/100)
+        for feat in desc:
+            if feat["name"] in data["features"].keys():
+                vec.extend(feat["norm"](data["features"][feat["name"]]))
 
         # TODO: fix
-        if len(vec) != 12:
+        if len(vec) != 18:
             continue
-
-
 
         print("added vector of len {}:".format(len(vec)), vec)
         module_X[data["module"]].append(vec)
 
 
-def train():
+def process():
     pprint(module_X)
 
     for m, X in module_X.items():
@@ -82,16 +84,8 @@ def train():
         if m != "http":
             continue
         X = np.array(X)
-        module_clusterings[m] = DBSCAN(eps=2, min_samples=2).fit(X)
+        module_clusterings[m] = DBSCAN(eps=3, min_samples=2).fit(X)
         print("labels for {}:".format(m), module_clusterings[m].labels_)
-
-
-def list_to_order_list(li, desc):
-    res = [-1 for i in range(len(desc.values()))]
-    for i in range(len(li)):
-        if li[i] in desc.keys():
-            res[desc[li[i]]] = i
-    return res
 
 
 """
