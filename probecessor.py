@@ -165,7 +165,7 @@ def stringify_dict_keys(d, prefix="", separator="/", start_regex=re.compile(""))
 
     return keys
 
-def print_statistic(input):
+def print_statistic(input, detail):
     with open(input, "r") as f:
         data = json.load(f)
 
@@ -189,14 +189,18 @@ def print_statistic(input):
 
         print("Port {}: {} hosts".format(p["port"], p["count"]))
 
+    if detail == "none":
+        return
+
     module_keys = stringify_dict_keys(data, start_regex=re.compile("^/[0-9.]*/port/[0-9]*/"))
     data_stats = {}
     for keys in module_keys:
-        data_stats[keys] = {"count": 0, "unique": 0, "value": {}}
+        data_stats[keys] = {"ports": 0, "hosts": 0, "value": {}}
         for ip in data:
-            key_unique = set()
-            value_unique = set()
+            key_hosts = set()
+            value_hosts = set()
             for port in data[ip]["port"]:
+                # aggregate key
                 d = data[ip]["port"][port]
                 for k in keys.split("/"):
                     d = d.get(k)
@@ -204,23 +208,37 @@ def print_statistic(input):
                         break
                 if not d:
                     continue
-                data_stats[keys]["count"] += 1
-                if not keys in key_unique:
-                    key_unique.add(keys)
-                    data_stats[keys]["unique"] += 1
+                data_stats[keys]["ports"] += 1
+                if not keys in key_hosts:
+                    key_hosts.add(keys)
+                    data_stats[keys]["hosts"] += 1
 
-                if isinstance(d, list):
+                if detail != "values":
                     continue
-                if not d in data_stats[keys]["value"]:
-                    data_stats[keys]["value"][d] = {"count": 0, "unique": 0}
-                data_stats[keys]["value"][d]["count"] += 1
-                if not (keys + "/" + str(d)) in value_unique:
-                    value_unique.add(keys + "/" + str(d))
-                    data_stats[keys]["value"][d]["unique"] += 1
-    pprint.pprint(data_stats)
-    print("Module statistics:")
-    #for m in modules.modules.keys():
-    #    print("{}: {} ports found totally".format(m, data_stats["name"][m]))
+                # aggregate values
+                values = [d]
+                if isinstance(d, list):
+                    values = d
+                for value in values:
+                    if not value in data_stats[keys]["value"]:
+                        data_stats[keys]["value"][value] = {"ports": 0, "hosts": 0}
+                    data_stats[keys]["value"][value]["ports"] += 1
+                    if not (keys + "/" + str(value)) in value_hosts:
+                        value_hosts.add(keys + "/" + str(value))
+                        data_stats[keys]["value"][value]["hosts"] += 1
+
+    for key in data_stats:
+        key_stats = data_stats[key]
+        print("Key: {}".format(key))
+        print(" - Ports: {}, Hosts: {}".format(key_stats["ports"], key_stats["hosts"]))
+
+        if detail != "values":
+            continue
+        for value in key_stats["value"]:
+            value_stats = key_stats["value"][value]
+            print("    - Value: {}".format(value))
+            print("       - Ports: {}, Hosts: {}".format(value_stats["ports"], value_stats["hosts"]))
+
     return
 
 if __name__ == "__main__":
@@ -239,6 +257,7 @@ if __name__ == "__main__":
     # sub-command statistic
     parser_statistic = subparsers.add_parser("statistic", help="Print statistics from extracted data.")
     parser_statistic.add_argument("input", help="Processed output file.", type=str)
+    parser_statistic.add_argument("--detail", help="Aggregate keys.", choices=["none", "keys", "values"], default="none")
     # sub-command classify
     parser_classify = subparsers.add_parser("classify", help="Classify a host.")
     parser_classify.add_argument("fingerprints", help="Fingerprints to use for classifying.", type=str)
@@ -250,7 +269,7 @@ if __name__ == "__main__":
     if args.subcommand == "extract":
         database_extract(args.output, args.database, args.label)
     elif args.subcommand == "statistic":
-        print_statistic(args.input)
+        print_statistic(args.input, args.detail)
     elif args.subcommand == "fingerprint":
         data = {}
 
