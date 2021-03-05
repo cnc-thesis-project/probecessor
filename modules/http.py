@@ -88,24 +88,13 @@ def process_probe(row):
     except ParserError as e:
         pass
 
-    """
-    print(protocol, version, status_code, status_text)
-    print("Headers:", ", ".join(headers.keys()))
-    print("Server:", server)
-    print("Date:", date)
-    print("Content-Type:", content_type)
-    print("Transfer-Encoding:", transfer_encoding)
-    print("Content-Length (in db):", len(content))
-    print("DOM tree:", tag_tree)
-    """
-
     data = {}
 
     probe_type = row["type"]
 
     data["{}:status_code".format(probe_type)] = int(status_code)
     data["{}:status_text".format(probe_type)] = status_text.decode()
-    data["{}:headers".format(probe_type)] = headers.keys()
+    data["{}:header_keys".format(probe_type)] = headers.keys()
     for header in headers:
         data["{}:header:{}".format(probe_type, header)] = headers[header]
     data["{}:dom_tree".format(probe_type)] = tag_tree

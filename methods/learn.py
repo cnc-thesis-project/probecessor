@@ -19,7 +19,7 @@ def list_to_order_list(li, desc):
     return res
 
 
-def _normalize_response_code(code):
+def _normalize_status_code(code):
     return [code/100]
 
 
@@ -31,35 +31,110 @@ def _normalize_header_keys(headers):
         "Content-Length": 3,
         "Connection": 4,
     }
-
     return list_to_order_list(headers, header_keys)
 
 
+def _normalize_kex_algorithms(arr):
+    algos = {
+        "curve25519-sha256": 0,
+        "curve25519-sha256@libssh.org": 1,
+        "ecdh-sha2-nistp256": 2,
+        "ecdh-sha2-nistp384": 3,
+        "ecdh-sha2-nistp521": 4,
+        "diffie-hellman-group-exchange-sha256": 5,
+        "diffie-hellman-group16-sha512": 6,
+        "diffie-hellman-group18-sha512": 7,
+        "diffie-hellman-group14-sha256": 8,
+        "diffie-hellman-group14-sha1": 9,
+    }
+    return list_to_order_list(arr, algos)
+
+
+def _normalize_server_host_key_algorithms(arr):
+    algos = {
+        "rsa-sha2-512": 0,
+        "rsa-sha2-256": 1,
+        "ssh-rsa": 2,
+        "ecdsa-sha2-nistp256": 3,
+        "ssh-ed25519": 4,
+    }
+    return list_to_order_list(arr, algos)
+
+
+def _normalize_encryption_algorithms(arr):
+    algos = {
+        "chacha20-poly1305@openssh.com": 0,
+        "aes128-ctr": 1,
+        "aes192-ctr": 2,
+        "aes256-ctr": 3,
+        "aes128-gcm@openssh.com": 4,
+        "aes256-gcm@openssh.com": 5,
+        "aes128-cbc": 6,
+        "aes192-cbc": 7,
+        "aes256-cbc": 8, 
+    }
+    return list_to_order_list(arr, algos)
+
+
+def _normalize_mac_algorithms(arr):
+    algos = {
+        "umac-64-etm@openssh.com": 0,
+        "umac-128-etm@openssh.com": 1,
+        "hmac-sha2-256-etm@openssh.com": 2,
+        "hmac-sha2-512-etm@openssh.com": 3,
+        "hmac-sha1-etm@openssh.com": 4,
+        "umac-64@openssh.com": 5,
+        "umac-128@openssh.com": 6,
+        "hmac-sha2-256": 7,
+        "hmac-sha2-512": 8,
+        "hmac-sha1": 9,
+    }
+    return list_to_order_list(arr, algos)
+
+
+# TODO: don't use hard coded array lengths
+
+# HTTP
+_default_header_keys = [ -1 ] * 5
+_default_status_code = [ -1 ]
+
+# SSH
+_default_kex_algorithms = [ -1 ] * 10
+_default_server_host_key_algorithms = [ -1 ] * 5
+_default_encryption_algorithms = [ -1 ] * 9
+_default_mac_algorithms = [ -1 ] * 10
+
 vector_descs = {
     "http": [
-        { "name": "get_root_header_keys", "norm": _normalize_header_keys },
-        { "name": "get_root_response_code", "norm": _normalize_response_code },
-        { "name": "head_root_header_keys", "norm": _normalize_header_keys },
-        { "name": "head_root_response_code", "norm": _normalize_response_code },
-        { "name": "delete_root_header_keys", "norm": _normalize_header_keys },
-        { "name": "delete_root_response_code", "norm": _normalize_response_code },
-        { "name": "very_simple_get_header_keys", "norm": _normalize_header_keys },
-        { "name": "very_simple_get_response_code", "norm": _normalize_response_code },
-        { "name": "not_exist_header_keys", "norm": _normalize_header_keys },
-        { "name": "not_exist_response_code", "norm": _normalize_response_code },
-        { "name": "invalid_version_header_keys", "norm": _normalize_header_keys },
-        { "name": "invalid_version_response_code", "norm": _normalize_response_code },
-        { "name": "invalid_protocol_header_keys", "norm": _normalize_header_keys },
-        { "name": "invalid_protocol_response_code", "norm": _normalize_response_code },
-        { "name": "long_path_header_keys", "norm": _normalize_header_keys },
-        { "name": "long_path_response_code", "norm": _normalize_response_code },
-        { "name": "get_favicon_header_keys", "norm": _normalize_header_keys },
-        { "name": "get_favicon_response_code", "norm": _normalize_response_code },
-        { "name": "get_robots_header_keys", "norm": _normalize_header_keys },
-        { "name": "get_robots_response_code", "norm": _normalize_response_code },
+        { "name": "get_root:header_keys", "norm": _normalize_header_keys, "default": _default_header_keys },
+        { "name": "get_root:status_code", "norm": _normalize_status_code, "default": _default_status_code },
+        { "name": "head_root:header_keys", "norm": _normalize_header_keys, "default": _default_header_keys },
+        { "name": "head_root:status_code", "norm": _normalize_status_code, "default": _default_status_code },
+        { "name": "delete_root:header_keys", "norm": _normalize_header_keys, "default": _default_header_keys },
+        { "name": "delete_root:status_code", "norm": _normalize_status_code, "default": _default_status_code },
+        { "name": "very_simple_get:header_keys", "norm": _normalize_header_keys, "default": _default_header_keys },
+        { "name": "very_simple_get:status_code", "norm": _normalize_status_code, "default": _default_status_code },
+        { "name": "not_exist:header_keys", "norm": _normalize_header_keys, "default": _default_header_keys },
+        { "name": "not_exist:status_code", "norm": _normalize_status_code, "default": _default_status_code },
+        { "name": "invalid_version:header_keys", "norm": _normalize_header_keys, "default": _default_header_keys },
+        { "name": "invalid_version:status_code", "norm": _normalize_status_code, "default": _default_status_code },
+        { "name": "invalid_protocol:header_keys", "norm": _normalize_header_keys, "default": _default_header_keys },
+        { "name": "invalid_protocol:status_code", "norm": _normalize_status_code, "default": _default_status_code },
+        { "name": "long_path:header_keys", "norm": _normalize_header_keys, "default": _default_header_keys },
+        { "name": "long_path:status_code", "norm": _normalize_status_code, "default": _default_status_code },
+        { "name": "get_favicon:header_keys", "norm": _normalize_header_keys, "default": _default_header_keys },
+        { "name": "get_favicon:status_code", "norm": _normalize_status_code, "default": _default_status_code },
+        { "name": "get_robots:header_keys", "norm": _normalize_header_keys, "default": _default_header_keys },
+        { "name": "get_robots:status_code", "norm": _normalize_status_code, "default": _default_status_code },
     ],
-    "ssh": {
-    },
+    "ssh": [
+        { "name": "ciphers:kex_algorithms", "norm": _normalize_kex_algorithms, "default": _default_kex_algorithms },
+        { "name": "ciphers:server_host_key_algorithms", "norm": _normalize_server_host_key_algorithms, "default": _default_server_host_key_algorithms },
+        { "name": "ciphers:encryption_algorithms_client_to_server", "norm": _normalize_encryption_algorithms, "default": _default_encryption_algorithms },
+        { "name": "ciphers:encryption_algorithms_server_to_client", "norm": _normalize_encryption_algorithms, "default": _default_encryption_algorithms },
+        { "name": "ciphers:mac_algorithms_client_to_server", "norm": _normalize_mac_algorithms, "default": _default_mac_algorithms},
+        { "name": "ciphers:mac_algorithms_server_to_client", "norm": _normalize_mac_algorithms, "default": _default_mac_algorithms},
+    ],
 }
 
 
@@ -69,33 +144,29 @@ def get_vector(host_data):
 
 # Add training data
 def add(host_data):
-    for data in host_data.values():
-        # TODO: fix
-        if data["module"] != "http":
+    for port_data in host_data["port"].values():
+        if port_data.get("name") in ["unknown", None]:
             continue
+
+        data = port_data[port_data["name"]]
 
         vec = []
-        desc = vector_descs[data["module"]]
+        desc = vector_descs[port_data["name"]]
         for feat in desc:
-            if feat["name"] in data["features"].keys():
-                vec.extend(feat["norm"](data["features"][feat["name"]]))
+            if feat["name"] in data.keys():
+                vec.extend(feat["norm"](data[feat["name"]]))
+            else:
+                vec.extend(feat["default"])
 
-        # TODO: fix
-        if len(vec) != 60:
-            continue
-
-        print("added vector of len {}:".format(len(vec)), vec)
-        module_X[data["module"]].append(vec)
+        #print("added vector of len {}:".format(len(vec)), vec)
+        module_X[port_data["name"]].append(vec)
 
 
 def process():
-    pprint(module_X, width=1000)
+    #pprint(module_X, width=1000)
 
     for m, X in module_X.items():
         if len(X) == 0:
-            continue
-        # TODO: temporary
-        if m != "http":
             continue
         X = np.array(X)
         module_clusterings[m] = DBSCAN(eps=8, min_samples=2).fit(X)
