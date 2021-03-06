@@ -1,5 +1,6 @@
 from sklearn.cluster import DBSCAN
 import numpy as np
+import joblib
 from pprint import pprint
 
 
@@ -8,14 +9,17 @@ module_X = {
     "ssh": []
 }
 
-module_clusterings = {}
+module_models = {}
 
 
+# Returns a list described by desc of the mutual orders of the elements in li.
 def list_to_order_list(li, desc):
     res = [-1 for i in range(len(desc.values()))]
+    j = 0
     for i in range(len(li)):
         if li[i] in desc.keys():
-            res[desc[li[i]]] = i
+            res[desc[li[i]]] = j
+            j+=1
     return res
 
 
@@ -138,8 +142,22 @@ vector_descs = {
 }
 
 
-def get_vector(host_data):
-    pass
+# Extracts a feature vector from the module data, e.g. port data.
+def extract_vector(mod_data):
+    if mod_data.get("name") in ["unknown", None]:
+        return None
+
+    data = mod_data[mod_data["name"]]
+
+    vec = []
+    desc = vector_descs[mod_data["name"]]
+    for feat in desc:
+        if feat["name"] in data.keys():
+            vec.extend(feat["norm"](data[feat["name"]]))
+        else:
+            vec.extend(feat["default"])
+
+    return vec
 
 
 # Add training data
@@ -147,6 +165,8 @@ def add(host_data):
     for port_data in host_data["port"].values():
         if port_data.get("name") in ["unknown", None]:
             continue
+        vec = extract_vector(port_data)
+        """
 
         data = port_data[port_data["name"]]
 
@@ -159,15 +179,36 @@ def add(host_data):
                 vec.extend(feat["default"])
 
         #print("added vector of len {}:".format(len(vec)), vec)
+        """
         module_X[port_data["name"]].append(vec)
 
 
-def process():
-    #pprint(module_X, width=1000)
-
+def process(out_path):
     for m, X in module_X.items():
         if len(X) == 0:
             continue
         X = np.array(X)
-        module_clusterings[m] = DBSCAN(eps=8, min_samples=2).fit(X)
-        print("labels for {}:".format(m), module_clusterings[m].labels_)
+        module_models[m] = DBSCAN(eps=8, min_samples=2).fit(X)
+        print("labels for {}:".format(m), module_models[m].labels_)
+
+        joblib.dump(module_X, out_path)
+
+
+# Returns the fingerprint match. If none match, return None.
+def classify(in_path, data):
+    module_X = joblib.load(in_path)
+
+    for ip, host_data in data.items():
+        print("matching host {} against known hosts".format(ip))
+        for m, mod_data in host_data.items():
+            if m == "port":
+                for port, port_data in mod_data.items():
+                    name = port_data.get("name")
+                    print("classifying {} port {}:{}".format(name, ip, port))
+                    if name == "unknown" or not name:
+                        continue
+                    vec = extract_vector(port_data)
+                    db = DBSCAN(eps=8, min_samples=2)
+                    X = np.array(module_X[name] + [vec])
+                    db.fit(X)
+                    print("{} port:".format(name), db.labels_[len(db.labels_) - 1])

@@ -146,11 +146,14 @@ if __name__ == "__main__":
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from processed file.")
     parser_fingerprint.add_argument("input", help="Processed output file.", type=str)
+    parser_fingerprint.add_argument("output", help="Output file for storing the fingerprints.", type=str)
     parser_fingerprint.add_argument("--method", help="Method to use.", type=str, default="learn", choices=["learn"])
-    # sub-command classify
+    # sub-command match
     # TODO: WIP
-    parser_fingerprint = subparsers.add_parser("classify", help="Classify a host.")
-    parser_fingerprint.add_argument("input", help="Processed output file.", type=str)
+    parser_classify = subparsers.add_parser("classify", help="Classify a host.")
+    parser_classify.add_argument("fingerprints", help="Fingerprints to use for classifying.", type=str)
+    parser_classify.add_argument("--method", help="Method to use.", type=str, default="learn", choices=["learn"])
+    parser_classify.add_argument("input", help="Processed output file.", type=str)
 
     args = parser.parse_args()
 
@@ -166,4 +169,10 @@ if __name__ == "__main__":
         for ip in data.keys():
             method.add(data[ip])
 
-        method.process()
+        method.process(args.output)
+    elif args.subcommand == "classify":
+        data = {}
+        with open(args.input) as f:
+            data = json.load(f)
+        method = methods.methods[args.method]
+        method.classify(args.fingerprints, data)
