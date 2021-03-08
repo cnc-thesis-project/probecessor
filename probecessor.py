@@ -36,7 +36,7 @@ def populate_statistics(ip_data):
 
     print(ip_data["stats"])
 
-def database_extract(output, database):
+def database_extract(output, database, label_path):
     print("Extract")
     data = {}
     for db_file in database:
@@ -131,6 +131,23 @@ def database_extract(output, database):
     for ip in remove_ip:
         del data[ip]
 
+    if label_path:
+        with open(label_path, "r") as f:
+            line = f.readline()
+            while line != "":
+                csv = line.strip().split(",")
+                if len(csv) != 4:
+                    continue
+
+                mwdb_id, ip, port, label = csv
+                if ip in data:
+                    label_data = {"type": label, "port": port, "id": mwdb_id, "port_avail": str(port) in data[ip]["port"]}
+                    if not "label" in data[ip]:
+                        data[ip]["label"] = []
+                    data[ip]["label"].append(label_data)
+
+                line = f.readline()
+
     with open(output, "w") as f:
         json.dump(data, f)
 
@@ -141,6 +158,7 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers(help='sub-command help', dest="subcommand")
     # sub-command extract
     parser_extract = subparsers.add_parser("extract", help="Extract data from database file.")
+    parser_extract.add_argument("--label", help="CSV file containing: id,ip,port,label", type=str)
     parser_extract.add_argument("database", help="A probeably database file.", type=str, nargs="+")
     parser_extract.add_argument("output", help="Processed output file.", type=str)
     # sub-command fingerprint
@@ -155,7 +173,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.subcommand == "extract":
-        database_extract(args.output, args.database)
+        database_extract(args.output, args.database, args.label)
     elif args.subcommand == "fingerprint":
         data = {}
 
