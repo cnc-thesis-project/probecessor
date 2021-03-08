@@ -7,6 +7,7 @@ import argparse
 import methods
 import fingerprint
 import re
+from scapy.all import PcapReader
 
 def populate_statistics(ip_data):
     ip_data["stats"] = {}
@@ -34,7 +35,42 @@ def populate_statistics(ip_data):
         if ip_data["port"][port].get("tls", False):
             ip_data["stats"]["tls"] += 1
 
-def database_extract(output, database, label_path):
+    print(ip_data["stats"])
+
+def pcap_extract(pcap_path, data):
+    for p in PcapReader(pcap_path):
+        # we are only interested in syn-ack packet
+        if not "TCP" in p:
+            continue
+        if p["TCP"].flags != "SA":
+            continue
+
+        ip = p["IP"].src
+        if not ip in data:
+            continue
+
+        if not "pcap" in data[ip]:
+            data[ip]["pcap"] = {}
+        data_pcap = data[ip]["pcap"]
+
+        ttl = p.ttl
+        # round up ttl to closest one in the list
+        for t in [32, 64, 128, 255]:
+            if ttl <= t:
+                ttl = t
+                break
+
+        mss = 0
+        for o in p["TCP"].options:
+            if o[0] == "MSS":
+                mss = o[1]
+                break
+
+        data_pcap["ttl"] = max(data_pcap.get("ttl", 0), ttl)
+        data_pcap["mss"] = max(data_pcap.get("mss", 0), mss)
+        data_pcap["win"] = max(data_pcap.get("win", 0), p["TCP"].window)
+
+def database_extract(output, database, label_path, pcap_path):
     print("Extract")
     data = {}
     for db_file in database:
@@ -145,6 +181,9 @@ def database_extract(output, database, label_path):
 
                 line = f.readline()
 
+    if pcap_path:
+        pcap_extract(pcap_path, data)
+
     with open(output, "w") as f:
         json.dump(data, f)
 
@@ -247,6 +286,7 @@ if __name__ == "__main__":
     # sub-command extract
     parser_extract = subparsers.add_parser("extract", help="Extract data from database file.")
     parser_extract.add_argument("--label", help="CSV file containing: id,ip,port,label", type=str)
+    parser_extract.add_argument("--pcap", help="Masscan pcap file.", type=str)
     parser_extract.add_argument("database", help="A probeably database file.", type=str, nargs="+")
     parser_extract.add_argument("output", help="Processed output file.", type=str)
     # sub-command fingerprint
@@ -267,7 +307,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.subcommand == "extract":
-        database_extract(args.output, args.database, args.label)
+        database_extract(args.output, args.database, args.label, args.pcap)
     elif args.subcommand == "statistic":
         print_statistic(args.input, args.detail)
     elif args.subcommand == "fingerprint":
