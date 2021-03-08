@@ -152,7 +152,7 @@ if __name__ == "__main__":
     # TODO: WIP
     parser_classify = subparsers.add_parser("classify", help="Classify a host.")
     parser_classify.add_argument("fingerprints", help="Fingerprints to use for classifying.", type=str)
-    parser_classify.add_argument("--method", help="Method to use.", type=str, default="learn", choices=["learn"])
+    parser_classify.add_argument("--method", help="Method to use.", type=str, default="learn", choices=["learn", "rules"])
     parser_classify.add_argument("input", help="Processed output file.", type=str)
 
     args = parser.parse_args()
@@ -175,4 +175,9 @@ if __name__ == "__main__":
         with open(args.input) as f:
             data = json.load(f)
         method = methods.methods[args.method]
-        method.classify(args.fingerprints, data)
+        for ip, host_data in data.items():
+            print("Attempting to match host {} against fingerprinted hosts".format(ip))
+            if method.classify(args.fingerprints, host_data):
+                print("Host {} matched".format(ip))
+            else:
+                print("Host {} did NOT match".format(ip))

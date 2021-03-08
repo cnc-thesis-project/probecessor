@@ -209,14 +209,16 @@ def classify(in_path, host_data):
                     continue
                 vec = extract_vector(port_data)
 
+
                 have_match = False
-
-                db = DBSCAN(eps=8, min_samples=2)
-                X = np.array(module_X[name] + [vec])
-                db.fit(X)
-
-                if db.labels_[len(db.labels_) - 1] != -1:
+                for fp in module_X[name]:
                     have_match = True
+                    for i in range(len(fp)):
+                        if vec[i] != fp[i]:
+                            have_match = False
+                            break
+                    if have_match:
+                        break
 
                 if have_match:
                     print("{} port {}".format(name, port), "matches a fingerprint")
