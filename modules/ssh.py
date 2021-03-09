@@ -1,4 +1,6 @@
 import struct
+from base64 import b64encode
+from sshpubkeys import SSHKey
 
 NAME_LIST_LEN_LEN = 4
 PACKET_LEN_LEN = 4
@@ -56,6 +58,37 @@ def parse_algo_negotiation(data):
     #print("Server algorithms:", algo_lists_map)
     return algo_lists_map
 
+def parse_key(data):
+    packet_len = struct.unpack(">i", data[0:4])[0]
+    padding_len = data[4]
+    payload = data[5:5+packet_len-padding_len-1]
+    ssh_msg = payload[0]
+
+    payload = payload[1:]
+
+    print("Payload")
+    print(payload, len(payload))
+    print(ssh_msg)
+
+    keys = {}
+
+    while len(payload) > 0:
+        chunk_size = struct.unpack(">i", payload[0:4])[0]
+        data = payload[4:chunk_size+4]
+
+        name_len = struct.unpack(">i", data[:4])[0]
+        name = data[4:4+name_len]
+
+        if all(0 < c < 128 for c in name) and name_len < chunk_size:
+            name = name.decode()
+            key = SSHKey("{} {}".format(name, b64encode(data).decode()))
+            print("{} {}".format(name, b64encode(data).decode()))
+            if key.bits is not None:
+                keys[key.key_type.decode()] = {"size": key.bits, "sha256": key.hash_sha256()}
+
+        payload = payload[chunk_size+4:]
+
+    return keys
 
 def run(rows):
     data = {}
@@ -66,4 +99,6 @@ def run(rows):
             algorithms = parse_algo_negotiation(row["data"])
             for key in algorithms:
                 data["ciphers:{}".format(key)] = algorithms[key]
+        elif row["type"] == "keys":
+            data["key_sha1"] = parse_key(row["data"])
     return data
