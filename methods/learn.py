@@ -209,7 +209,7 @@ def classify(in_path, host_data):
 
                 have_match = False
 
-                clt = KMeans()
+                clt = KMeans(n_clusters=20)
                 X = np.array(module_X[name])
                 clt.fit(X)
 
