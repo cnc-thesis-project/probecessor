@@ -1,4 +1,4 @@
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import KMeans
 import numpy as np
 import joblib
 from pprint import pprint
@@ -188,8 +188,6 @@ def process(out_path):
         if len(X) == 0:
             continue
         X = np.array(X)
-        module_models[m] = DBSCAN(eps=8, min_samples=2).fit(X)
-        print("labels for {}:".format(m), module_models[m].labels_)
 
         joblib.dump(module_X, out_path)
 
@@ -211,15 +209,14 @@ def classify(in_path, host_data):
 
                 have_match = False
 
-                db = DBSCAN(eps=8, min_samples=2)
-                X = np.array(module_X[name] + [vec])
-                db.fit(X)
+                clt = KMeans()
+                X = np.array(module_X[name])
+                clt.fit(X)
 
-                if db.labels_[len(db.labels_) - 1] != -1:
-                    have_match = True
+                pred = clt.predict([vec])
 
-                if have_match:
-                    print("{} port {}".format(name, port), "matches a fingerprint")
+                if pred != -1:
+                    print("{} port {}".format(name, port), "matches {}".format(pred))
                 else:
                     host_match = False
                     print("no match for {} port {}".format(name, port))

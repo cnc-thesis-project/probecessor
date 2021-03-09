@@ -3,9 +3,7 @@ import sqlite3
 import modules
 import pprint
 import json
-import tlsh
 import argparse
-import fingerprint
 import methods
 
 def populate_statistics(ip_data):
