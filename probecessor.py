@@ -32,8 +32,6 @@ def populate_statistics(ip_data):
         if ip_data["port"][port].get("tls", False):
             ip_data["stats"]["tls"] += 1
 
-    print(ip_data["stats"])
-
 def database_extract(output, database, label_path):
     print("Extract")
     data = {}
@@ -123,7 +121,6 @@ def database_extract(output, database, label_path):
             print("{}: No ports responded, omitting".format(ip))
             remove_ip.append(ip)
             continue
-        print(ip)
         populate_statistics(data[ip])
 
     for ip in remove_ip:

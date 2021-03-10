@@ -18,7 +18,6 @@ def run(rows):
             #data["issued"] = 1; print(dir(cert))
             data["self_issued"] = cert.self_issued
             data["self_signed"] = cert.self_signed
-            print(dir(cert))
             #print(cert.is_valid_domain_ip())
             data["valid_domains"] = cert.valid_domains
             data["valid_ips"] = cert.valid_ips

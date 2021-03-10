@@ -15,7 +15,6 @@ def parse_name_list(nl):
 
 def parse_string(data):
     #print("Server string:", data[0:-2])
-    print("DATA:", data)
     return data.rstrip(b"\r\n").decode()
 
 
