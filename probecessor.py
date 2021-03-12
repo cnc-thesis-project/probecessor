@@ -301,7 +301,7 @@ if __name__ == "__main__":
     # sub-command classify
     parser_classify = subparsers.add_parser("classify", help="Classify a host.")
     parser_classify.add_argument("fingerprints", help="Fingerprints to use for classifying.", type=str)
-    parser_classify.add_argument("--method", help="Method to use.", type=str, default="learn", choices=["learn", "rules"])
+    parser_classify.add_argument("--method", help="Method to use.", type=str, default="learn", choices=methods.methods.keys())
     parser_classify.add_argument("input", help="Processed output file.", type=str)
 
     args = parser.parse_args()
