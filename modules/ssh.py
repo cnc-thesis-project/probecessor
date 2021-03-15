@@ -92,12 +92,16 @@ def parse_key(data):
 def run(rows):
     data = {}
     for row in rows:
-        if row["type"] == "string":
-            data["server"] = parse_string(row["data"])
-        elif row["type"] == "ciphers":
-            algorithms = parse_algo_negotiation(row["data"])
-            for key in algorithms:
-                data["ciphers:{}".format(key)] = algorithms[key]
-        elif row["type"] == "keys":
-            data["key_sha1"] = parse_key(row["data"])
+        # TODO: more proper error handling
+        try:
+            if row["type"] == "string":
+                data["server"] = parse_string(row["data"])
+            elif row["type"] == "ciphers":
+                algorithms = parse_algo_negotiation(row["data"])
+                for key in algorithms:
+                    data["ciphers:{}".format(key)] = algorithms[key]
+            elif row["type"] == "keys":
+                data["keys"] = parse_key(row["data"])
+        except:
+            pass
     return data
