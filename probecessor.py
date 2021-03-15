@@ -204,7 +204,7 @@ def stringify_dict_keys(d, prefix="", separator="/", start_regex=re.compile(""))
 
     return keys
 
-def print_statistic(input, detail):
+def print_statistics(input, detail):
     with open(input, "r") as f:
         data = json.load(f)
 
@@ -294,10 +294,10 @@ if __name__ == "__main__":
     parser_fingerprint.add_argument("input", help="Processed output file.", type=str)
     parser_fingerprint.add_argument("output", help="Output file for storing the fingerprints.", type=str)
     parser_fingerprint.add_argument("--method", help="Method to use.", type=str, default="learn", choices=["learn"])
-    # sub-command statistic
-    parser_statistic = subparsers.add_parser("statistic", help="Print statistics from extracted data.")
-    parser_statistic.add_argument("input", help="Processed output file.", type=str)
-    parser_statistic.add_argument("--detail", help="Aggregate keys.", choices=["none", "keys", "values"], default="none")
+    # sub-command stats
+    parser_stats = subparsers.add_parser("stats", help="Print statistics from extracted data.")
+    parser_stats.add_argument("input", help="Processed output file.", type=str)
+    parser_stats.add_argument("--detail", help="Aggregate keys.", choices=["none", "keys", "values"], default="none")
     # sub-command classify
     parser_classify = subparsers.add_parser("classify", help="Classify a host.")
     parser_classify.add_argument("fingerprints", help="Fingerprints to use for classifying.", type=str)
@@ -308,8 +308,8 @@ if __name__ == "__main__":
 
     if args.subcommand == "extract":
         database_extract(args.output, args.database, args.label, args.pcap)
-    elif args.subcommand == "statistic":
-        print_statistic(args.input, args.detail)
+    elif args.subcommand == "stats":
+        print_statistics(args.input, args.detail)
     elif args.subcommand == "fingerprint":
         data = {}
 
