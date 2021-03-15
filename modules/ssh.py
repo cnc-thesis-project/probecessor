@@ -65,9 +65,9 @@ def parse_key(data):
 
     payload = payload[1:]
 
-    print("Payload")
-    print(payload, len(payload))
-    print(ssh_msg)
+    #print("Payload")
+    #print(payload, len(payload))
+    #print(ssh_msg)
 
     keys = {}
 
@@ -81,7 +81,7 @@ def parse_key(data):
         if all(0 < c < 128 for c in name) and name_len < chunk_size:
             name = name.decode()
             key = SSHKey("{} {}".format(name, b64encode(data).decode()))
-            print("{} {}".format(name, b64encode(data).decode()))
+            #print("{} {}".format(name, b64encode(data).decode()))
             if key.bits is not None:
                 keys[key.key_type.decode()] = {"size": key.bits, "sha256": key.hash_sha256()}
 
