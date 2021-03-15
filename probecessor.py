@@ -5,6 +5,9 @@ import pprint
 import json
 import argparse
 import methods
+import fingerprint
+import re
+from scapy.all import PcapReader
 
 def populate_statistics(ip_data):
     ip_data["stats"] = {}
@@ -32,7 +35,42 @@ def populate_statistics(ip_data):
         if ip_data["port"][port].get("tls", False):
             ip_data["stats"]["tls"] += 1
 
-def database_extract(output, database, label_path):
+    print(ip_data["stats"])
+
+def pcap_extract(pcap_path, data):
+    for p in PcapReader(pcap_path):
+        # we are only interested in syn-ack packet
+        if not "TCP" in p:
+            continue
+        if p["TCP"].flags != "SA":
+            continue
+
+        ip = p["IP"].src
+        if not ip in data:
+            continue
+
+        if not "pcap" in data[ip]:
+            data[ip]["pcap"] = {}
+        data_pcap = data[ip]["pcap"]
+
+        ttl = p.ttl
+        # round up ttl to closest one in the list
+        for t in [32, 64, 128, 255]:
+            if ttl <= t:
+                ttl = t
+                break
+
+        mss = 0
+        for o in p["TCP"].options:
+            if o[0] == "MSS":
+                mss = o[1]
+                break
+
+        data_pcap["ttl"] = max(data_pcap.get("ttl", 0), ttl)
+        data_pcap["mss"] = max(data_pcap.get("mss", 0), mss)
+        data_pcap["win"] = max(data_pcap.get("win", 0), p["TCP"].window)
+
+def database_extract(output, database, label_path, pcap_path):
     print("Extract")
     data = {}
     for db_file in database:
@@ -143,10 +181,104 @@ def database_extract(output, database, label_path):
 
                 line = f.readline()
 
+    if pcap_path:
+        pcap_extract(pcap_path, data)
+
     with open(output, "w") as f:
         json.dump(data, f)
 
     dbh.close()
+
+def stringify_dict_keys(d, prefix="", separator="/", start_regex=re.compile("")):
+    keys = set()
+
+    for k in d:
+        new_prefix = prefix + separator + k
+        if isinstance(d[k], dict):
+            keys.update(stringify_dict_keys(d[k], new_prefix, separator, start_regex))
+        else:
+            match = start_regex.match(new_prefix)
+            if match is None:
+                continue
+            keys.add(new_prefix[match.span()[1]:])
+
+    return keys
+
+def print_statistics(input, detail):
+    with open(input, "r") as f:
+        data = json.load(f)
+
+    # things to print: average port stats, % of hosts having "..." module, rdns, key stat
+    ip_len = len(data)
+    print("Hosts: {}".format(ip_len))
+    for key in data[list(data.keys())[0]]["stats"]:
+        value_sum = sum(map(lambda ip: data[ip]["stats"][key], data))
+        print("{}: {}, average per host: {}".format(key, value_sum, (value_sum/ip_len)))
+
+    port_stat = [{"port": i, "count": 0} for i in range(65536)]
+    for ip in data:
+        for port in data[ip]["port"]:
+            port_stat[int(port)]["count"] += 1
+
+    print("\nPort statistics - Top ~20")
+    port_stat = sorted(port_stat, key=lambda k: k["count"], reverse=True)
+    for p in port_stat[:20]:
+        if p["count"] == 0:
+            break
+
+        print("Port {}: {} hosts".format(p["port"], p["count"]))
+
+    if detail == "none":
+        return
+
+    module_keys = stringify_dict_keys(data, start_regex=re.compile("^/[0-9.]*/port/[0-9]*/"))
+    data_stats = {}
+    for keys in module_keys:
+        data_stats[keys] = {"ports": 0, "hosts": 0, "value": {}}
+        for ip in data:
+            key_hosts = set()
+            value_hosts = set()
+            for port in data[ip]["port"]:
+                # aggregate key
+                d = data[ip]["port"][port]
+                for k in keys.split("/"):
+                    d = d.get(k)
+                    if not d:
+                        break
+                if not d:
+                    continue
+                data_stats[keys]["ports"] += 1
+                if not keys in key_hosts:
+                    key_hosts.add(keys)
+                    data_stats[keys]["hosts"] += 1
+
+                if detail != "values":
+                    continue
+                # aggregate values
+                values = [d]
+                if isinstance(d, list):
+                    values = d
+                for value in values:
+                    if not value in data_stats[keys]["value"]:
+                        data_stats[keys]["value"][value] = {"ports": 0, "hosts": 0}
+                    data_stats[keys]["value"][value]["ports"] += 1
+                    if not (keys + "/" + str(value)) in value_hosts:
+                        value_hosts.add(keys + "/" + str(value))
+                        data_stats[keys]["value"][value]["hosts"] += 1
+
+    for key in data_stats:
+        key_stats = data_stats[key]
+        print("Key: {}".format(key))
+        print(" - Ports: {}, Hosts: {}".format(key_stats["ports"], key_stats["hosts"]))
+
+        if detail != "values":
+            continue
+        for value in key_stats["value"]:
+            value_stats = key_stats["value"][value]
+            print("    - Value: {}".format(value))
+            print("       - Ports: {}, Hosts: {}".format(value_stats["ports"], value_stats["hosts"]))
+
+    return
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
@@ -154,6 +286,7 @@ if __name__ == "__main__":
     # sub-command extract
     parser_extract = subparsers.add_parser("extract", help="Extract data from database file.")
     parser_extract.add_argument("--label", help="CSV file containing: id,ip,port,label", type=str)
+    parser_extract.add_argument("--pcap", help="Masscan pcap file.", type=str)
     parser_extract.add_argument("database", help="A probeably database file.", type=str, nargs="+")
     parser_extract.add_argument("output", help="Processed output file.", type=str)
     # sub-command fingerprint
@@ -161,8 +294,11 @@ if __name__ == "__main__":
     parser_fingerprint.add_argument("input", help="Processed output file.", type=str)
     parser_fingerprint.add_argument("output", help="Output file for storing the fingerprints.", type=str)
     parser_fingerprint.add_argument("--method", help="Method to use.", type=str, default="learn", choices=["learn"])
-    # sub-command match
-    # TODO: WIP
+    # sub-command stats
+    parser_stats = subparsers.add_parser("stats", help="Print statistics from extracted data.")
+    parser_stats.add_argument("input", help="Processed output file.", type=str)
+    parser_stats.add_argument("--detail", help="Aggregate keys.", choices=["none", "keys", "values"], default="none")
+    # sub-command classify
     parser_classify = subparsers.add_parser("classify", help="Classify a host.")
     parser_classify.add_argument("fingerprints", help="Fingerprints to use for classifying.", type=str)
     parser_classify.add_argument("--method", help="Method to use.", type=str, default="learn", choices=["learn", "rules"])
@@ -171,7 +307,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.subcommand == "extract":
-        database_extract(args.output, args.database, args.label)
+        database_extract(args.output, args.database, args.label, args.pcap)
+    elif args.subcommand == "stats":
+        print_statistics(args.input, args.detail)
     elif args.subcommand == "fingerprint":
         data = {}
 

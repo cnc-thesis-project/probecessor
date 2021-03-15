@@ -65,8 +65,12 @@ def process_probe(row):
         return {}
 
     # parse first line
-    protocol, status_code, status_text = request_line.split(b" ", 2)
-    protocol, version = protocol.split(b"/", 1)
+    try:
+        protocol, status_code, status_text, version = None, None, None, None
+        protocol, status_code, status_text = request_line.split(b" ", 2)
+        protocol, version = protocol.split(b"/", 1)
+    except ValueError as e:
+        pass
 
     # get headers
     headers = BytesParser().parsebytes(headers_alone)
@@ -92,9 +96,19 @@ def process_probe(row):
 
     probe_type = row["type"]
 
-    data["{}:status_code".format(probe_type)] = int(status_code)
-    data["{}:status_text".format(probe_type)] = status_text.decode()
-    data["{}:header_keys".format(probe_type)] = headers.keys()
+    try:
+        data["{}:status_code".format(probe_type)] = int(status_code)
+    except TypeError:
+        data["{}:status_code".format(probe_type)] = None
+    try:
+        data["{}:status_text".format(probe_type)] = status_text.decode()
+    except AttributeError:
+        data["{}:status_text".format(probe_type)] = None
+    try:
+        data["{}:header_keys".format(probe_type)] = headers.keys()
+    except TypeError:
+        data["{}:header_keys".format(probe_type)] = None
+
     for header in headers:
         data["{}:header:{}".format(probe_type, header)] = headers[header]
     data["{}:dom_tree".format(probe_type)] = tag_tree
