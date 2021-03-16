@@ -2,6 +2,7 @@ import itertools
 from pprint import pprint
 import json
 import html_similarity
+from util.label import get_label_names
 
 def _compare_equal(value1, value2):
     return 0 if value1 == value2 else 1
@@ -158,9 +159,9 @@ def classify(in_path, host_data):
         host_port_used = list(map(lambda x: x[2], candidates))
         host_port_left = list(filter(lambda x: x not in host_port_used, host_data["port"].keys()))
 
-        print("{}, candidates: {}".format(ip, candidates))
-        print(fp_port_used, fp_port_left)
-        print(host_port_used, host_port_left)
+        #print("{}, candidates: {}".format(ip, candidates))
+        #print(fp_port_used, fp_port_left)
+        #print(host_port_used, host_port_left)
 
         # calculate the maximum possible distance
         for fp_port in fp_port_used:
@@ -182,8 +183,12 @@ def classify(in_path, host_data):
 
         # normalize total distance to value betweeon 0.0 - 1.0
         total_dist /= max_dist #* len(set(fp_ports.keys()) | set(host_ports.keys()))
-        ip_distances.append((total_dist, ip))
-        print("Distance {} to {}".format(total_dist, ip))
+
+        # get labels
+        labels = get_label_names(fp_data)
+
+        ip_distances.append((total_dist, ip, labels))
+        #print("Distance {} to {} ({})".format(total_dist, ip, labels))
 
     if len(ip_distances) == 0:
         return
@@ -191,6 +196,6 @@ def classify(in_path, host_data):
     ip_distances = sorted(ip_distances)
     print("IP distances (distance: {}-{})".format(ip_distances[0][0],ip_distances[-1][0]))
     for c in ip_distances:
-        print("Distance {} to {}".format(*c))
+        print("Distance {} to {} ({})".format(*c))
 
     return

@@ -7,6 +7,7 @@ import argparse
 import methods
 import fingerprint
 import re
+from util.label import get_label_names
 from scapy.all import PcapReader
 
 def populate_statistics(ip_data):
@@ -327,7 +328,8 @@ if __name__ == "__main__":
             data = json.load(f)
         method = methods.methods[args.method]
         for ip, host_data in data.items():
-            print("Attempting to match host {} against fingerprinted hosts".format(ip))
+            labels = get_label_names(host_data)
+            print("Attempting to match host {} ({}) against fingerprinted hosts".format(ip, labels))
             if method.classify(args.fingerprints, host_data):
                 print("Host {} matched".format(ip))
             else:
