@@ -7,6 +7,9 @@ from util.label import get_label_names
 def _compare_equal(value1, value2):
     return 0 if value1 == value2 else 1
 
+def get_module_weight(mod_keys):
+    return sum(map(lambda x: x["weight"], mod_keys))
+
 def _compare_header_keys(value1, value2):
     if value1 is None:
         value1 = []
@@ -34,41 +37,41 @@ diff_keys = {
         # populated at runtime using code
     ],
     "ssh": [
-        { "name": "ciphers:kex_algorithms", "cmp": _compare_equal },
-        { "name": "ciphers:server_host_key_algorithms", "cmp": _compare_equal },
-        { "name": "ciphers:encryption_algorithms_client_to_server", "cmp": _compare_equal },
-        { "name": "ciphers:encryption_algorithms_server_to_client", "cmp": _compare_equal },
-        { "name": "ciphers:mac_algorithms_client_to_server", "cmp": _compare_equal },
-        { "name": "ciphers:mac_algorithms_server_to_client", "cmp": _compare_equal },
+        { "name": "ciphers:kex_algorithms", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "ciphers:server_host_key_algorithms", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "ciphers:encryption_algorithms_client_to_server", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "ciphers:encryption_algorithms_server_to_client", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "ciphers:mac_algorithms_client_to_server", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "ciphers:mac_algorithms_server_to_client", "cmp": _compare_equal, "weight": 1.0 },
     ],
     "tls": [
-        { "name": "subject", "cmp": _compare_equal },
-        { "name": "issuer", "cmp": _compare_equal },
-        { "name": "sign_alg", "cmp": _compare_equal },
-        { "name": "hash_alg", "cmp": _compare_equal },
-        { "name": "key_size", "cmp": _compare_equal },
-        { "name": "key_sha1", "cmp": _compare_equal },
-        { "name": "not_before", "cmp": _compare_equal },
-        { "name": "not_after", "cmp": _compare_equal },
-        { "name": "valid_period", "cmp": _compare_equal },
-#        { "name": "valid_domains", "cmp": _compare_equal },
-#        { "name": "valid_ips", "cmp": _compare_equal },
-#        { "name": "jarm", "cmp": _compare_equal },
+        { "name": "subject", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "issuer", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "sign_alg", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "hash_alg", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "key_size", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "key_sha1", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "not_before", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "not_after", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "valid_period", "cmp": _compare_equal, "weight": 1.0 },
+#        { "name": "valid_domains", "cmp": _compare_equal, "weight": 1.0 },
+#        { "name": "valid_ips", "cmp": _compare_equal, "weight": 1.0 },
+#        { "name": "jarm", "cmp": _compare_equal, "weight": 1.0 },
 
     ],
     "unknown": [
-        { "name": "response", "cmp": _compare_equal },
+        { "name": "response", "cmp": _compare_equal, "weight": 1.0 },
     ]
 }
 
 http_request_types = ["get_root", "head_root", "delete_root", "very_simple_get", "not_exist",
                 "invalid_version", "invalid_protocol", "long_path", "get_favicon", "get_robots"]
 for request in http_request_types:
-    diff_keys["http"].append({"name": "{}:header:Server".format(request), "cmp": _compare_header_keys})
-    diff_keys["http"].append({"name": "{}:header:Content-Type".format(request), "cmp": _compare_header_keys})
-    diff_keys["http"].append({"name": "{}:header_keys".format(request), "cmp": _compare_header_keys})
-    diff_keys["http"].append({"name": "{}:status_code".format(request), "cmp": _compare_equal})
-    diff_keys["http"].append({"name": "{}:dom_tree".format(request), "cmp": _compare_dom_tree})
+    diff_keys["http"].append({ "name": "{}:header:Server".format(request), "cmp": _compare_header_keys, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:header:Content-Type".format(request), "cmp": _compare_header_keys, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:header_keys".format(request), "cmp": _compare_header_keys, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:status_code".format(request), "cmp": _compare_equal, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:dom_tree".format(request), "cmp": _compare_dom_tree, "weight": 1.0 })
 
 
 def port_diff(name, data1, data2):
@@ -145,7 +148,7 @@ def classify(in_path, host_data):
                 dist = 0
                 if "tls" in fp_port_data or "tls" in host_port_data:
                     dist += port_diff("tls", fp_port_data, host_port_data)
-                    max_dist += len(diff_keys["tls"])
+                    max_dist += get_module_weight(diff_keys["tls"])
                 dist += port_diff(mod, fp_port_data, host_port_data)
                 distances.append((dist, fp_port, host_port))
 
@@ -169,17 +172,17 @@ def classify(in_path, host_data):
             # no need to do this for host_port_used because these ports are connected to each other
             mod = fp_data["port"][fp_port].get("name")
             if mod:
-                max_dist += len(diff_keys[mod])
+                max_dist += get_module_weight(diff_keys[mod])
         # calculation for ports that was only in either one
         for data, port_left in [(fp_data, fp_port_left), (host_data, host_port_left)]:
             for port in port_left:
                 mod = data["port"][port].get("name")
                 if mod:
-                    total_dist += len(diff_keys[mod])
-                    max_dist += len(diff_keys[mod])
+                    total_dist += get_module_weight(diff_keys[mod])
+                    max_dist += get_module_weight(diff_keys[mod])
                     if "tls" in port_data:
-                        total_dist += len(diff_keys["tls"])
-                        max_dist += len(diff_keys["tls"])
+                        total_dist += get_module_weight(diff_keys["tls"])
+                        max_dist += get_module_weight(diff_keys["tls"])
 
         # normalize total distance to value betweeon 0.0 - 1.0
         total_dist /= max_dist #* len(set(fp_ports.keys()) | set(host_ports.keys()))
