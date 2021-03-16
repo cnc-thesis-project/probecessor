@@ -26,7 +26,7 @@ def populate_statistics(ip_data):
     expected_port = 0
 
     for port in ip_data["port"]:
-        if len(ip_data["port"][port]) == 0:
+        if "unknown" in ip_data["port"][port] and len(ip_data["port"][port]["unknown"]["response"]) == 0:
             ip_data["stats"]["no_response"] += 1
         elif ip_data["port"][port]["name"] == "unknown":
             ip_data["stats"]["unknown"] += 1
@@ -35,8 +35,6 @@ def populate_statistics(ip_data):
 
         if ip_data["port"][port].get("tls", False):
             ip_data["stats"]["tls"] += 1
-
-    print(ip_data["stats"])
 
 def pcap_extract(pcap_path, data):
     for p in PcapReader(pcap_path):
@@ -131,7 +129,7 @@ def database_extract(output, database, label_path, pcap_path):
 
                 # TODO: handle name: port
                 if port not in data[ip]["port"]:
-                    data[ip]["port"][port] = {}
+                    data[ip]["port"][port] = {"name": "unknown"}
                 for m in probe_map[port]:
                     # module stuff
                     mod = modules.modules.get(m)
@@ -143,8 +141,8 @@ def database_extract(output, database, label_path, pcap_path):
                     # TODO: fix so it doesn't need this shitty check, all modules should be treated equally!!!
                     if m != "tls":
                         data[ip]["port"][port]["name"] = m
-                    else:
-                        data[ip]["port"][port]["name"] = data[ip]["port"][port].get("name", "unknown")
+                if data[ip]["port"][port]["name"] == "unknown" and not "unknown" in data[ip]["port"][port]:
+                    data[ip]["port"][port]["unknown"] = {"response": ""}
 
         c1.close()
 
@@ -166,6 +164,7 @@ def database_extract(output, database, label_path, pcap_path):
         del data[ip]
 
     if label_path:
+        print("Adding labels...")
         with open(label_path, "r") as f:
             line = f.readline()
             while line != "":
@@ -183,6 +182,7 @@ def database_extract(output, database, label_path, pcap_path):
                 line = f.readline()
 
     if pcap_path:
+        print("Adding pcap data...")
         pcap_extract(pcap_path, data)
 
     with open(output, "w") as f:
