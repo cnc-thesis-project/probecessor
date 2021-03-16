@@ -4,11 +4,11 @@ import json
 import html_similarity
 from util.label import get_label_names
 
-def _compare_equal(value1, value2):
-    return 0 if value1 == value2 else 1
-
 def get_module_weight(mod_keys):
     return sum(map(lambda x: x["weight"], mod_keys))
+
+def _compare_equal(value1, value2):
+    return 0 if value1 == value2 else 1
 
 def _compare_header_keys(value1, value2):
     if value1 is None:
@@ -78,6 +78,7 @@ def port_diff(name, data1, data2):
     distance = 0
     data1 = data1.get(name, {})
     data2 = data2.get(name, {})
+    # TODO: check for silent port
     for key_meta in diff_keys[name]:
         key = key_meta["name"]
         value1 = data1.get(key)
@@ -86,14 +87,14 @@ def port_diff(name, data1, data2):
             pass #print(key, value1, value2)
         distance += key_meta["cmp"](value1, value2)
 
-    return distance
+    return distance / get_module_weight(diff_keys[name])
 
 def connect_ports(distances):
     fp_ports = set(map(lambda x: x[1], distances))
     host_ports = set(map(lambda x: x[2], distances))
     candidates = []
-    # if multiple ports have same distance, 'x[1] != x[2]' makes so it gets prioritized in case the port matches
-    distances = sorted(distances, key=lambda x: x[0] + (x[1] != x[2]) * 0.1)
+    # if multiple ports have same distance, 'x[1] != x[2]' makes so it gets prioritized in case the port number matches
+    distances = sorted(distances, key=lambda x: x[0] + (x[1] != x[2]) * 1e-128)
     while len(host_ports) > 0 and len(distances) > 0:
         distance, fp_port, host_port = distances[0]
 
@@ -141,14 +142,15 @@ def classify(in_path, host_data):
 
         total_dist = 0
         max_dist = 0
-        candidates = [] # list of tuple with port from both host with distance
+        # list of tuple with port from both host that looks most identical, each port is only referenced once
+        candidates = []
         for mod in set(fp_ports.keys()) & set(host_ports.keys()):
             distances = [] # list of tuple in format: (distance, fingerprint port, host port)
             for (fp_port, fp_port_data), (host_port, host_port_data) in itertools.product(fp_ports[mod], host_ports[mod]):
+                # get distance between two ports and add the result to list distances
                 dist = 0
                 if "tls" in fp_port_data or "tls" in host_port_data:
                     dist += port_diff("tls", fp_port_data, host_port_data)
-                    max_dist += get_module_weight(diff_keys["tls"])
                 dist += port_diff(mod, fp_port_data, host_port_data)
                 distances.append((dist, fp_port, host_port))
 
@@ -162,27 +164,32 @@ def classify(in_path, host_data):
         host_port_used = list(map(lambda x: x[2], candidates))
         host_port_left = list(filter(lambda x: x not in host_port_used, host_data["port"].keys()))
 
-        #print("{}, candidates: {}".format(ip, candidates))
-        #print(fp_port_used, fp_port_left)
-        #print(host_port_used, host_port_left)
-
         # calculate the maximum possible distance
-        for fp_port in fp_port_used:
+        for _, fp_port, host_port in candidates:
             # calculation for ports that was in both
-            # no need to do this for host_port_used because these ports are connected to each other
-            mod = fp_data["port"][fp_port].get("name")
-            if mod:
-                max_dist += get_module_weight(diff_keys[mod])
-        # calculation for ports that was only in either one
+            fp_port_data = fp_data["port"][fp_port]
+            host_port_data = host_data["port"][host_port]
+
+            max_dist += 1
+            if "tls" in fp_port_data or "tls" in host_port_data:
+                max_dist += 1
+
+        # calculation for ports that was only available in either one
         for data, port_left in [(fp_data, fp_port_left), (host_data, host_port_left)]:
             for port in port_left:
-                mod = data["port"][port].get("name")
-                if mod:
-                    total_dist += get_module_weight(diff_keys[mod])
-                    max_dist += get_module_weight(diff_keys[mod])
-                    if "tls" in port_data:
-                        total_dist += get_module_weight(diff_keys["tls"])
-                        max_dist += get_module_weight(diff_keys["tls"])
+                port_data = data["port"][port]
+                mod = port_data.get("name")
+
+                total_dist += 1
+                max_dist += 1
+                if "tls" in port_data:
+                    total_dist += 1
+                    max_dist += 1
+
+        print("{}, candidates: {}".format(ip, candidates))
+        #print(fp_port_used, fp_port_left)
+        #print(host_port_used, host_port_left)
+        print("Total distance: {}/{}".format(total_dist, max_dist))
 
         # normalize total distance to value betweeon 0.0 - 1.0
         total_dist /= max_dist #* len(set(fp_ports.keys()) | set(host_ports.keys()))
