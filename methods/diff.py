@@ -4,6 +4,10 @@ import json
 import html_similarity
 from util.label import get_label_names
 
+
+data = {}
+
+
 def get_module_weight(mod_keys):
     return sum(map(lambda x: x["weight"], mod_keys))
 
@@ -120,10 +124,15 @@ def connect_ports(distances):
 
     return candidates
 
-# Returns the fingerprint match. If none match, return None.
-def classify(in_path, host_data):
+
+def load_fingerprints(fp_path):
+    global data
     with open(in_path, "r") as f:
         data = json.load(f)
+
+
+# Returns the fingerprint match. If none match, return None.
+def classify(in_path, host_data):
 
     #print(data)
     #print(host_data)

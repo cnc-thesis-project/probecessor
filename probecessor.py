@@ -5,7 +5,6 @@ import pprint
 import json
 import argparse
 import methods
-import fingerprint
 import re
 from util.label import get_label_names
 from scapy.all import PcapReader
@@ -299,11 +298,12 @@ if __name__ == "__main__":
     parser_stats = subparsers.add_parser("stats", help="Print statistics from extracted data.")
     parser_stats.add_argument("input", help="Processed output file.", type=str)
     parser_stats.add_argument("--detail", help="Aggregate keys.", choices=["none", "keys", "values"], default="none")
-    # sub-command classify
-    parser_classify = subparsers.add_parser("classify", help="Classify a host.")
-    parser_classify.add_argument("fingerprints", help="Fingerprints to use for classifying.", type=str)
-    parser_classify.add_argument("--method", help="Method to use.", type=str, default="learn", choices=methods.methods.keys())
-    parser_classify.add_argument("input", help="Processed output file.", type=str)
+    # sub-command match
+    # TODO: WIP
+    parser_match = subparsers.add_parser("match", help="Match a host.")
+    parser_match.add_argument("fingerprints", help="Fingerprints to use for matching.", type=str)
+    parser_match.add_argument("--method", help="Method to use.", type=str, default="learn", choices=methods.methods.keys())
+    parser_match.add_argument("input", help="Processed output file.", type=str)
 
     args = parser.parse_args()
 
@@ -313,24 +313,18 @@ if __name__ == "__main__":
         print_statistics(args.input, args.detail)
     elif args.subcommand == "fingerprint":
         data = {}
-
         with open(args.input, "r") as f:
             data = json.load(f)
 
         method = methods.methods[args.method]
-        for ip in data.keys():
-            method.add(data[ip])
-
-        method.process(args.output)
-    elif args.subcommand == "classify":
+        method.store_fingerprints(args.output, data)
+    elif args.subcommand == "match":
         data = {}
         with open(args.input) as f:
             data = json.load(f)
         method = methods.methods[args.method]
+        method.load_fingerprints(args.fingerprints)
         for ip, host_data in data.items():
             labels = get_label_names(host_data)
             print("Attempting to match host {} ({}) against fingerprinted hosts".format(ip, labels))
-            if method.classify(args.fingerprints, host_data):
-                print("Host {} matched".format(ip))
-            else:
-                print("Host {} did NOT match".format(ip))
+            method.match(host_data)

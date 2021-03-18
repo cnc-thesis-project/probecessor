@@ -1,8 +1,12 @@
 from sklearn.cluster import KMeans
 import numpy as np
+import math
 import joblib
 from pprint import pprint
+import sys
+from util.label import get_label_names
 
+NUM_CLUSTERS = 50
 
 module_X = {
     "http": [],
@@ -10,6 +14,7 @@ module_X = {
 }
 
 module_models = {}
+host_fingerprints = []
 
 
 # Returns a list described by desc of the mutual orders of the elements in li.
@@ -160,67 +165,137 @@ def extract_vector(mod_data):
     return vec
 
 
-# Add training data
-def add(host_data):
-    for port_data in host_data["port"].values():
+def normalized_host(host_data):
+    norm = {"ports":{}}
+    for port, port_data in host_data["port"].items():
         if port_data.get("name") in ["unknown", None]:
             continue
-        vec = extract_vector(port_data)
-        """
 
-        data = port_data[port_data["name"]]
-
-        vec = []
-        desc = vector_descs[port_data["name"]]
-        for feat in desc:
-            if feat["name"] in data.keys():
-                vec.extend(feat["norm"](data[feat["name"]]))
-            else:
-                vec.extend(feat["default"])
-
-        #print("added vector of len {}:".format(len(vec)), vec)
-        """
-        module_X[port_data["name"]].append(vec)
+        norm["ports"][port] = {}
+        # Extract vector for this port to use for clustering.
+        norm["ports"][port]["vector"] = extract_vector(port_data)
+        norm["ports"][port]["name"] = port_data["name"]
+    norm["labels"] = get_label_names(host_data)
+    return norm
 
 
-def process(out_path):
+def store_fingerprints(out_path, data):
+    fingerprints = {"hosts": []}
+    norm_hosts = []
+
+    for host_data in data.values():
+        norm_host = normalized_host(host_data)
+        norm_hosts.append(norm_host)
+        for norm_port in norm_host["ports"].values():
+            module_X[norm_port["name"]].append(norm_port["vector"])
+
+    # Train models
     for m, X in module_X.items():
         if len(X) == 0:
             continue
+
+        # TODO: temp
+        if len(X) < NUM_CLUSTERS:
+            continue
+
+        clt = KMeans(n_clusters=NUM_CLUSTERS)
         X = np.array(X)
+        clt.fit(X)
 
-        joblib.dump(module_X, out_path)
+        module_models[m] = clt
+
+    for norm_host in norm_hosts:
+        for port, norm_port in norm_host["ports"].items():
+            # TODO: Fix this inefficient code plz :o
+            model = module_models.get(norm_port["name"])
+            if not model:
+                continue
+            norm_host["ports"][port]["cluster"] = model.predict([norm_port["vector"]])[0]
+        fingerprints["hosts"].append(fp)
+
+    fingerprints["models"] = module_models
+    joblib.dump(fingerprints, out_path)
 
 
-# Returns the fingerprint match. If none match, return None.
-def classify(in_path, host_data):
-    module_X = joblib.load(in_path)
+def load_fingerprints(fp_path):
+    global host_fingerprints
+    global module_models
+    fingerprints = joblib.load(fp_path)
+    module_models = fingerprints["models"]
+    host_fingerprints = fingerprints["hosts"]
 
-    #print("matching host {} against known hosts".format(ip))
-    host_match = True
-    for m, mod_data in host_data.items():
-        if m == "port":
-            for port, port_data in mod_data.items():
-                name = port_data.get("name")
-                #print("classifying {} port {}:{}".format(name, ip, port))
-                if name == "unknown" or not name:
-                    continue
-                vec = extract_vector(port_data)
 
-                have_match = False
+def distance_host(norm_host):
+    dist_host = {
+        "ports": []
+    }
 
-                clt = KMeans(n_clusters=20)
-                X = np.array(module_X[name])
-                clt.fit(X)
+    if len(norm_host["ports"]) < 1:
+        return None
 
-                pred = clt.predict([vec])
+    for port, port_data in norm_host["ports"].items():
+        model = module_models.get(port_data["name"])
+        if model:
+            dist_port = {}
+            dist_port["name"] = port_data["name"]
+            dist_port["cluster"] = model.predict([port_data["vector"]])[0]
+            trns = model.transform([port_data["vector"]])
+            dist_port["distance"] = min(trns[0])
+            dist_port["port"] = port
+            dist_host["ports"].append(dist_port)
+    return dist_host
 
-                if pred != -1:
-                    print("{} port {}".format(name, port), "matches {}".format(pred))
-                else:
-                    host_match = False
-                    print("no match for {} port {}".format(name, port))
-                    break
-        if not host_match:
+
+"""
+def compare_hosts(clust_host1, clust_host2):
+    print("COMPARING HOSTS:", clust_host1, clust_host2)
+    if len(clust_host1["ports"]) > len(clust_host2["ports"]):
+        host1 = clust_host1
+        host2 = clust_host2
+    else:
+        host1 = clust_host2
+        host2 = clust_host1
+
+    ports1 = host1["ports"]
+    if len(ports1) < 1:
+        return False
+    for port, port_clust1 in ports1.items():
+        port_clust2 = host2["ports"].get(port)
+        if port_clust2:
+            print("CMP port {} with clust {} TO other port with clust {}".format(port, port_clust1, port_clust2))
+            if port_clust1 != port_clust2:
+                return False
+        else:
+            return False
+    return True
+"""
+
+
+# Match the host against the fingerprints
+def match(host_data):
+    norm_host = normalized_host(host_data)
+
+    print("distance host:", distance_host(norm_host))
+
+    """
+    clustered_host = {"ports":{}}
+
+    for port, norm_port in norm_host["ports"].items():
+        name = norm_port["name"]
+        vec = norm_port["vector"]
+        clt = module_models.get(name)
+        if not clt:
+            print("NO CLASSIFIER FOR {}".format(name))
+            continue
+
+    found_match = False
+    for fp in host_fingerprints:
+        if compare_hosts(fp, clustered_host):
+            found_match = True
             break
-    return host_match
+
+    if found_match:
+        print("Host MATCHED")
+    else:
+        print("Host did NOT match")
+    """
