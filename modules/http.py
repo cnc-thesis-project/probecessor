@@ -1,6 +1,45 @@
 from email.parser import BytesParser
 from lxml import html
 from lxml.etree import ParserError, Comment
+import modules.port
+
+
+class HttpPort(modules.port.Port):
+    def __init__(self, port):
+        super().__init__("http", port)
+
+
+    def populate(self, rows):
+        data = {}
+
+        for probe_type in probe_types:
+            row = get_type(rows, probe_type)
+            if row is not None:
+                data.update(process_probe(row))
+
+                # timing related
+                response_time = get_type(rows, probe_type + "_time")["data"].split(b" ")
+                data["{}:response_start".format(probe_type)] = float(response_time[0])
+                data["{}:response_end".format(probe_type)] = float(response_time[0])
+        self.data = data
+
+
+    def get_property(self, name):
+        return self.data.get(name)
+
+
+    def has_property(self, name):
+        return name in self.data
+
+
+    def to_dict(self):
+        return self.data
+
+
+class HttpResponse():
+    def __init__(self, name):
+        self.name = name
+
 
 probe_types = [
     "get_root",
