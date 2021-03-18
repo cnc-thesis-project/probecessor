@@ -10,21 +10,25 @@ def get_module_weight(mod_keys):
 def _compare_equal(value1, value2):
     return 0 if value1 == value2 else 1
 
+def _compare_entropy(value1, value2):
+    # set the distance as entropy diff, but up to 1.0
+    return min(abs(value1 - value2), 1)
+
 def _compare_header_keys(value1, value2):
-    if value1 is None:
-        value1 = []
-    if value2 is None:
-        value2 = []
+    #if value1 is None:
+    #    value1 = []
+    #if value2 is None:
+    #    value2 = []
     if ".".join(value1) == ".".join(value2):
         return 0
     else:
         return 1
 
 def _compare_dom_tree(value1, value2):
-    if value1 is None:
-        value1 = ""
-    if value2 is None:
-        value2 = ""
+    #if value1 is None:
+    #    value1 = ""
+    #if value2 is None:
+    #    value2 = ""
     if value1 == value2:
         return 0
     try:
@@ -61,6 +65,7 @@ diff_keys = {
     ],
     "unknown": [
         { "name": "response", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "entropy", "cmp": _compare_entropy, "weight": 1.0 },
     ]
 }
 
@@ -83,9 +88,16 @@ def port_diff(name, data1, data2):
         key = key_meta["name"]
         value1 = data1.get(key)
         value2 = data2.get(key)
-        if key_meta["cmp"](value1, value2) != 0:
-            pass #print(key, value1, value2)
-        distance += key_meta["cmp"](value1, value2)
+        if value1 is None and value2 is None:
+            # both doesn't have the key -> similar!
+            key_dist = 0
+        elif value1 is None or value2 is None:
+            # either one lacks the key -> not similar!
+            key_dist = 1
+        else:
+            # both have the key -> compare the values and get distance
+            key_dist = key_meta["cmp"](value1, value2)
+        distance += key_dist
 
     return distance / get_module_weight(diff_keys[name])
 
@@ -148,10 +160,9 @@ def classify(in_path, host_data):
             distances = [] # list of tuple in format: (distance, fingerprint port, host port)
             for (fp_port, fp_port_data), (host_port, host_port_data) in itertools.product(fp_ports[mod], host_ports[mod]):
                 # get distance between two ports and add the result to list distances
-                dist = 0
+                dist = port_diff(mod, fp_port_data, host_port_data)
                 if "tls" in fp_port_data or "tls" in host_port_data:
-                    dist += port_diff("tls", fp_port_data, host_port_data)
-                dist += port_diff(mod, fp_port_data, host_port_data)
+                    dist = (dist + port_diff("tls", fp_port_data, host_port_data)) / 2.0
                 distances.append((dist, fp_port, host_port))
 
             c = connect_ports(distances)
@@ -171,8 +182,8 @@ def classify(in_path, host_data):
             host_port_data = host_data["port"][host_port]
 
             max_dist += 1
-            if "tls" in fp_port_data or "tls" in host_port_data:
-                max_dist += 1
+            #if "tls" in fp_port_data or "tls" in host_port_data:
+            #    max_dist += 1
 
         # calculation for ports that was only available in either one
         for data, port_left in [(fp_data, fp_port_left), (host_data, host_port_left)]:
@@ -182,14 +193,14 @@ def classify(in_path, host_data):
 
                 total_dist += 1
                 max_dist += 1
-                if "tls" in port_data:
-                    total_dist += 1
-                    max_dist += 1
+                #if "tls" in port_data:
+                #    total_dist += 1
+                #    max_dist += 1
 
-        print("{}, candidates: {}".format(ip, candidates))
+        #print("{}, candidates: {}".format(ip, candidates))
         #print(fp_port_used, fp_port_left)
         #print(host_port_used, host_port_left)
-        print("Total distance: {}/{}".format(total_dist, max_dist))
+        #print("Total distance: {}/{}".format(total_dist, max_dist))
 
         # normalize total distance to value betweeon 0.0 - 1.0
         total_dist /= max_dist #* len(set(fp_ports.keys()) | set(host_ports.keys()))
@@ -204,7 +215,15 @@ def classify(in_path, host_data):
         return
 
     ip_distances = sorted(ip_distances)
-    print("IP distances (distance: {}-{})".format(ip_distances[0][0],ip_distances[-1][0]))
+
+    label = ip_distances[0][2]
+    lbl_dist = 0
+    for c in ip_distances:
+        if label != c[2]:
+            break
+        lbl_dist = c[0]
+
+    print("IP distances (distance: {}-{}, label dist: {}, label: {})".format(ip_distances[0][0],ip_distances[-1][0], lbl_dist, label))
     for c in ip_distances:
         print("Distance {} to {} ({})".format(*c))
 
