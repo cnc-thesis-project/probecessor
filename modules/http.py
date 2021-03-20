@@ -123,6 +123,10 @@ def process_probe(row):
     content_type = headers.get("Content-Type", "")
     transfer_encoding = list(map(lambda s: s.strip(), headers.get("Transfer-Encoding", "").split(",")))
 
+    charset = "utf-8"
+    if "charset=" in content_type:
+        charset = content_type[content_type.find("charset=")+len("charset="):]
+
     if "chunked" in transfer_encoding:
         # the content is chunked and needs to be merged
         content = merge_chunks(content)
@@ -145,7 +149,7 @@ def process_probe(row):
     except TypeError:
         data["{}:status_code".format(probe_type)] = None
     try:
-        data["{}:status_text".format(probe_type)] = status_text.decode()
+        data["{}:status_text".format(probe_type)] = status_text.decode(charset)
     except AttributeError:
         data["{}:status_text".format(probe_type)] = None
     try:
