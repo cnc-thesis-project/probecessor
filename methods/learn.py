@@ -162,8 +162,11 @@ def extract_vector(port):
     return vec
 
 
+# Returns a representation of the host as
+# a dictionary containing the port feature vectors.
 def normalized_host(host):
     norm = {"ports":{}}
+    norm["labels"] = host.labels
     for port in host.ports.values():
         port_num = port.port
         if port.type == "unknown":
@@ -192,6 +195,10 @@ def store_fingerprints(out_path, data):
         print("Training model for {}".format(m))
         if len(X) == 0:
             print("error: len(X) == 0")
+            continue
+
+        if len(X) <= NUM_CLUSTERS:
+            print("WARNING: Can't train model for '{}'. Too few samples.".format(m))
             continue
 
         clt = KMeans(n_clusters=NUM_CLUSTERS)
@@ -223,7 +230,7 @@ def load_fingerprints(fp_path):
 
 def distance_host(norm_host):
     dist_host = {
-        "ports": []
+        "ports": {}
     }
 
     if len(norm_host["ports"]) < 1:
@@ -238,13 +245,50 @@ def distance_host(norm_host):
             trns = model.transform([port_data["vector"]])
             dist_port["distance"] = min(trns[0])
             dist_port["port"] = port
-            dist_host["ports"].append(dist_port)
+            dist_host["ports"][port] = dist_port
         else:
             print("no model for {}".format(port_data["type"]))
     return dist_host
 
 
+def match_with(host1, host2):
+    if len(host1["ports"]) != len(host2["ports"]):
+        return False
+
+    if len(host2["ports"]) > len(host1["ports"]):
+        tmp_host = host2
+        host2 = host1
+        host1 = tmp_host
+
+    for port_num, port1 in host1["ports"].items():
+        port2 = host2["ports"].get(port_num)
+        if port2:
+            cluster1 = port1.get("cluster")
+            cluster2 = port2.get("cluster")
+            # TODO: sometimes the cluster does not exist because of training failure
+            # which is the result of too few samples.
+            if not cluster1 or not cluster2:
+                continue
+            if cluster1 != cluster2:
+                return False
+        else:
+            return False
+    return True
+
+
 # Match the host against the fingerprints
 def match(host):
+    if len(host.labels) > 0:
+        print("Matching labeled host {} ({}) to fingerprints".format(host.ip, host.labels))
+    else:
+        print("Matching host {} to fingerprints".format(host.ip))
     norm_host = normalized_host(host)
-    print("distance host:", distance_host(norm_host))
+    the_host = distance_host(norm_host)
+
+    for fp_host in host_fingerprints:
+        if match_with(fp_host, the_host):
+            print("Match found for host {}: {}".format(host.ip, fp_host["labels"]))
+            return True
+
+    print("No match found for host {}".format(host.ip))
+    return False
