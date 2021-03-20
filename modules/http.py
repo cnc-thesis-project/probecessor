@@ -2,7 +2,7 @@ from email.parser import BytesParser
 from lxml import html
 from lxml.etree import ParserError, Comment
 import modules.port
-
+import codecs
 
 class HttpPort(modules.port.Port):
     def __init__(self, port):
@@ -127,6 +127,10 @@ def process_probe(row):
     if "charset=" in content_type:
         charset = content_type[content_type.find("charset=")+len("charset="):]
         if charset == "undef":
+            charset = "utf-8"
+        try:
+            codecs.lookup(charset)
+        except LookupError:
             charset = "utf-8"
 
     if "chunked" in transfer_encoding:
