@@ -110,6 +110,8 @@ def database_extract(output, database, label_path, pcap_path):
                 break
 
             ip = row["ip"]
+            if int(ip.split(".")[3]) % 4 != 0:
+                continue
             if not host_map.get(ip):
                 host_map[ip] = modules.host.Host(ip)
             module_name = row["name"]
@@ -149,14 +151,14 @@ def database_extract(output, database, label_path, pcap_path):
                     """
                     #sys.exit(1)
                     pass
-
         curse.close()
+        print("")
 
     remove_ip = []
     for ip in host_map:
         if len(host_map[ip].ports) == 0:
             # TODO: add a flag that decides whether to exclude this or not
-            print("{}: No ports open, omitting".format(ip))
+            #print("{}: No ports open, omitting".format(ip))
             remove_ip.append(ip)
             continue
         """
@@ -197,7 +199,8 @@ def database_extract(output, database, label_path, pcap_path):
 
     # TODO: serialize host object
 
-    print("{} IP hosts processed".format(len(host_map)))
+    print("{} hosts processed".format(len(host_map)))
+    print("Saving data to file {}".format(output))
 
     joblib.dump(host_map, output)
 
@@ -304,6 +307,7 @@ def fingerprint(fp_out, data_in, method):
 
 
 def match(data_in, fp_in, method):
+    print("Loading data from {} ...".format(data_in))
     data = joblib.load(data_in)
     method = methods.methods[method]
     method.load_fingerprints(fp_in)
