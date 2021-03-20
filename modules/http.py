@@ -126,6 +126,8 @@ def process_probe(row):
     charset = "utf-8"
     if "charset=" in content_type:
         charset = content_type[content_type.find("charset=")+len("charset="):]
+        if charset == "undef":
+            charset = "utf-8"
 
     if "chunked" in transfer_encoding:
         # the content is chunked and needs to be merged
