@@ -92,9 +92,11 @@ def process_probe(row):
     if not row["data"].startswith(b"HTTP/"):
         return {} # TODO: do some kind of content analysis
 
+    response = row["data"].replace(b"\r\n\r\n", b"\n\n")
+
     try:
         # split in headers and content
-        raw_headers, content = row["data"].split(b"\r\n\r\n", 1)
+        raw_headers, content = response.split(b"\n\n", 1)
         request_line, headers_alone = raw_headers.split(b"\r\n", 1)
     except ValueError as e:
         return {}

@@ -145,12 +145,11 @@ def database_extract(output, database, label_path, pcap_path):
                 try:
                     port_obj.add_data(row)
                 except Exception as e:
-                    """
                     print("Error adding data for {}:{}".format(ip, port))
-                    print(e)
-                    """
-                    #sys.exit(1)
-                    pass
+                    import traceback
+                    traceback.print_exc()
+                    sys.exit(1)
+
         curse.close()
         print("")
 
