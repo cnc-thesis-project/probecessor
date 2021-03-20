@@ -134,7 +134,7 @@ def process_probe(row):
     probe_type = row["type"]
 
     try:
-        data["{}:status_code".format(probe_type)] = int(status_code)
+        data["{}:status_code".format(probe_type)] = float(status_code)
     except TypeError:
         data["{}:status_code".format(probe_type)] = None
     try:
