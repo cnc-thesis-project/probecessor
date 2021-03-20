@@ -55,8 +55,13 @@ def merge_chunks(chunks):
     content = b""
 
     while len(chunks) > 0:
-        chunk_size, chunk = chunks.split(b"\r\n", 1)
-        chunk_size = int(chunk_size, 16)
+        try:
+            chunk_size, chunk = chunks.split(b"\r\n", 1)
+            chunk_size = int(chunk_size, 16)
+        except ValueError:
+            # HTTP is fucked up
+            chunk_size = len(chunks)
+            chunk = chunks
 
         chunk = chunk[0:chunk_size]
         content += chunk
@@ -92,6 +97,7 @@ def process_probe(row):
     if not row["data"].startswith(b"HTTP/"):
         return {} # TODO: do some kind of content analysis
 
+    #print(row["data"], "\n")
     response = row["data"].replace(b"\r\n\r\n", b"\n\n", 1)
 
     try:
