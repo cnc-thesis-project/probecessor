@@ -5,9 +5,9 @@ import modules.unknown
 import modules.tls
 
 modules = {
-    "http": modules.http,
-    "ssh": modules.ssh,
-    "rdns": modules.rdns,
-    "unknown": modules.unknown,
-    "tls": modules.tls,
+    "http": modules.http.HttpPort,
+    "ssh": modules.ssh.SshPort,
+#    "rdns": modules.rdns.RdnsModule,
+#    "unknown": modules.unknown.UnknownModule,
+    "tls": modules.tls.TlsPort,
 }

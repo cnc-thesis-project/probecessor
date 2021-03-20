@@ -1,12 +1,48 @@
 import struct
 from base64 import b64encode
 from sshpubkeys import SSHKey
+import modules.port
 
 NAME_LIST_LEN_LEN = 4
 PACKET_LEN_LEN = 4
 PADDING_LEN_LEN = 1
 MSG_KEXINIT_LEN = 1
 COOKIE_LEN = 16
+
+
+class SshPort(modules.port.Port):
+    def __init__(self, port):
+        super().__init__("ssh", port)
+
+
+    def populate(self, rows):
+        data = {}
+        for row in rows:
+            # TODO: more proper error handling
+            try:
+                if row["type"] == "string":
+                    data["server"] = parse_string(row["data"])
+                elif row["type"] == "ciphers":
+                    algorithms = parse_algo_negotiation(row["data"])
+                    for key in algorithms:
+                        data["ciphers:{}".format(key)] = algorithms[key]
+                elif row["type"] == "keys":
+                    data["keys"] = parse_key(row["data"])
+            except:
+                pass
+        self.data = data
+
+
+    def get_property(self, name):
+        return self.data.get(name)
+
+
+    def has_property(self, name):
+        return name in self.data
+
+    def to_dict(self):
+        return self.data
+
 
 # Parses an SSH name-list as specified in RFC 4251
 def parse_name_list(nl):

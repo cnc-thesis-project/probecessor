@@ -1,6 +1,8 @@
-def get_label_names(host_data):
+def get_label_names(host):
+    # TODO
+    return
     labels = set()
-    for l in host_data.get("label", []):
+    for l in host.get_labels():
         labels.add(l["type"])
     if len(labels) == 0:
         labels.add("unlabeled")

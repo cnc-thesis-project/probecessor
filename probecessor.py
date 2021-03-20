@@ -8,8 +8,11 @@ import methods
 import re
 from util.label import get_label_names
 from scapy.all import PcapReader
+import modules.host
+import joblib
 
-def populate_statistics(ip_data):
+
+def populate_statistics(host):
     ip_data["stats"] = {}
     # nr of no response at all from server port
     ip_data["stats"]["no_response"] = 0
@@ -36,6 +39,8 @@ def populate_statistics(ip_data):
             ip_data["stats"]["tls"] += 1
 
 def pcap_extract(pcap_path, data):
+    # TODO: Examine if this is solved well
+    return
     for p in PcapReader(pcap_path):
         # we are only interested in syn-ack packet
         if not "TCP" in p:
@@ -46,10 +51,6 @@ def pcap_extract(pcap_path, data):
         ip = p["IP"].src
         if not ip in data:
             continue
-
-        if not "pcap" in data[ip]:
-            data[ip]["pcap"] = {}
-        data_pcap = data[ip]["pcap"]
 
         ttl = p.ttl
         # round up ttl to closest one in the list
@@ -64,13 +65,16 @@ def pcap_extract(pcap_path, data):
                 mss = o[1]
                 break
 
+        data_pcap = {}
         data_pcap["ttl"] = max(data_pcap.get("ttl", 0), ttl)
         data_pcap["mss"] = max(data_pcap.get("mss", 0), mss)
         data_pcap["win"] = max(data_pcap.get("win", 0), p["TCP"].window)
 
+
 def database_extract(output, database, label_path, pcap_path):
     print("Extract")
     data = {}
+
     for db_file in database:
         try:
             open(db_file, "r")
@@ -113,51 +117,54 @@ def database_extract(output, database, label_path, pcap_path):
 
             for port in probe_map:
                 if not data.get(ip):
-                    data[ip] = {"port": {}}
+                    data[ip] = modules.host.Host(ip)
 
                 if port == "0":
                     # ip module stuff
-                    # TODO: use ip module processor?
+                    # TODO: use ip module processor? (Yes /b)
+                    # TODO: remove continue
+                    continue
                     for m in probe_map[port]:
                         if m == "geoip":
                             country, asn, as_desc = probe_map[port][m][0]["data"].decode().split("\t")
                             data[ip][m] = {"country": country, "asn": int(asn), "as_desc": as_desc}
                         else:
                             data[ip][m] = probe_map[port][m][0]["data"].decode()
-                    continue
+                else:
+                    for m in probe_map[port]:
+                        # module stuff
+                        port_class = modules.modules.get(m)
+                        if not port_class:
+                            continue
+                        if m == "tls":
+                            continue
+                        else:
+                            port_obj = port_class(port)
 
-                # TODO: handle name: port
-                if port not in data[ip]["port"]:
-                    data[ip]["port"][port] = {"name": "unknown"}
-                for m in probe_map[port]:
-                    # module stuff
-                    mod = modules.modules.get(m)
-                    if not mod:
-                        continue
-
-                    mod_data = mod.run(probe_map[port][m])
-                    data[ip]["port"][port][m] = mod_data
-                    # TODO: fix so it doesn't need this shitty check, all modules should be treated equally!!!
-                    if m != "tls":
-                        data[ip]["port"][port]["name"] = m
-                if data[ip]["port"][port]["name"] == "unknown" and not "unknown" in data[ip]["port"][port]:
-                    data[ip]["port"][port]["unknown"] = {"response": ""}
+                        port_obj.populate(probe_map[port][m])
+                        data[ip].insert_port(port_obj)
 
         c1.close()
 
     remove_ip = []
     for ip in data:
-        if len(data[ip]["port"]) == 0:
+        pprint.pprint(data[ip].ports)
+        if len(data[ip].ports) == 0:
             # TODO: add a flag that decides whether to exclude this or not
             print("{}: No ports open, omitting".format(ip))
             remove_ip.append(ip)
             continue
-        if sum(map(len, data[ip]["port"].values())) == 0:
+        """
+        if sum(map(len, data[ip].ports)) == 0:
             # TODO: add a flag that decides whether to exclude this or not
             print("{}: No ports responded, omitting".format(ip))
             remove_ip.append(ip)
             continue
-        populate_statistics(data[ip])
+        """
+
+        # TODO:
+        # data[ip].get_statistics()
+        #populate_statistics(data[ip])
 
     for ip in remove_ip:
         del data[ip]
@@ -173,10 +180,8 @@ def database_extract(output, database, label_path, pcap_path):
 
                 mwdb_id, ip, port, label = csv
                 if ip in data:
-                    label_data = {"type": label, "port": port, "id": mwdb_id, "port_avail": str(port) in data[ip]["port"]}
-                    if not "label" in data[ip]:
-                        data[ip]["label"] = []
-                    data[ip]["label"].append(label_data)
+                    # TODO: add the rest of the label data
+                    data[ip].add_label(label)
 
                 line = f.readline()
 
@@ -184,8 +189,10 @@ def database_extract(output, database, label_path, pcap_path):
         print("Adding pcap data...")
         pcap_extract(pcap_path, data)
 
-    with open(output, "w") as f:
-        json.dump(data, f)
+
+    # TODO: serialize host object
+
+    joblib.dump(data, output)
 
     dbh.close()
 
@@ -280,51 +287,55 @@ def print_statistics(input, detail):
 
     return
 
+
+def fingerprint(fp_out, data_in, method):
+    data = joblib.load(data_in)
+
+    method = methods.methods.get(method)
+    if method:
+        method.store_fingerprints(fp_out, data)
+
+
+def match(data_in, fp_in, method):
+    data = joblib.load(data_in)
+    method = methods.methods[method]
+    method.load_fingerprints(fp_in)
+    for ip, host in data.items():
+        #labels = get_label_names(host_data)
+        print("Attempting to match host {} against fingerprinted hosts".format(ip))
+        method.match(host)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
-    subparsers = parser.add_subparsers(help='sub-command help', dest="subcommand")
+    subparsers = parser.add_subparsers(help="Probecessor command to run.", dest="subcommand")
     # sub-command extract
     parser_extract = subparsers.add_parser("extract", help="Extract data from database file.")
-    parser_extract.add_argument("--label", help="CSV file containing: id,ip,port,label", type=str)
-    parser_extract.add_argument("--pcap", help="Masscan pcap file.", type=str)
-    parser_extract.add_argument("database", help="A probeably database file.", type=str, nargs="+")
-    parser_extract.add_argument("output", help="Processed output file.", type=str)
+    parser_extract.add_argument("--labels-in", help="Additional CSV file with host label data containing: id,ip,port,label", type=str)
+    parser_extract.add_argument("--pcap-in", help="Additional pcap file.", type=str)
+    parser_extract.add_argument("--db-in", help="A probeably database file.", type=str, nargs="+", required=True)
+    parser_extract.add_argument("--data-out", help="Output file holding the processed host data.", type=str, required=True)
     # sub-command fingerprint
-    parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from processed file.")
-    parser_fingerprint.add_argument("input", help="Processed output file.", type=str)
-    parser_fingerprint.add_argument("output", help="Output file for storing the fingerprints.", type=str)
-    parser_fingerprint.add_argument("--method", help="Method to use.", type=str, default="learn", choices=["learn"])
+    parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
+    parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, required=True)
+    parser_fingerprint.add_argument("--fp-out", help="Output file for storing the fingerprints.", type=str, required=True)
+    parser_fingerprint.add_argument("--method", help="Method to use for .", type=str, default="learn", choices=["learn"])
     # sub-command stats
-    parser_stats = subparsers.add_parser("stats", help="Print statistics from extracted data.")
-    parser_stats.add_argument("input", help="Processed output file.", type=str)
+    parser_stats = subparsers.add_parser("stats", help="Print statistics from host data.")
+    parser_stats.add_argument("--data-in", help="Data file to print statistics from.", type=str, required=True)
     parser_stats.add_argument("--detail", help="Aggregate keys.", choices=["none", "keys", "values"], default="none")
     # sub-command match
-    # TODO: WIP
-    parser_match = subparsers.add_parser("match", help="Match a host.")
-    parser_match.add_argument("fingerprints", help="Fingerprints to use for matching.", type=str)
-    parser_match.add_argument("--method", help="Method to use.", type=str, default="learn", choices=methods.methods.keys())
-    parser_match.add_argument("input", help="Processed output file.", type=str)
+    parser_match = subparsers.add_parser("match", help="Match a host to fingerprinted hosts.")
+    parser_match.add_argument("--fp-in", help="Fingerprints to use for matching.", type=str, required=True)
+    parser_match.add_argument("--data-in", help="Data file to match with.", type=str, required=True)
+    parser_match.add_argument("--method", help="Method to use for matching.", type=str, default="learn", choices=methods.methods.keys())
 
     args = parser.parse_args()
 
     if args.subcommand == "extract":
-        database_extract(args.output, args.database, args.label, args.pcap)
+        database_extract(args.data_out, args.db_in, args.labels_in, args.pcap_in)
     elif args.subcommand == "stats":
-        print_statistics(args.input, args.detail)
+        print_statistics(args.data_in, args.detail)
     elif args.subcommand == "fingerprint":
-        data = {}
-        with open(args.input, "r") as f:
-            data = json.load(f)
-
-        method = methods.methods[args.method]
-        method.store_fingerprints(args.output, data)
+        fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
-        data = {}
-        with open(args.input) as f:
-            data = json.load(f)
-        method = methods.methods[args.method]
-        method.load_fingerprints(args.fingerprints)
-        for ip, host_data in data.items():
-            labels = get_label_names(host_data)
-            print("Attempting to match host {} ({}) against fingerprinted hosts".format(ip, labels))
-            method.match(host_data)
+        match(args.data_in, args.fp_in, args.method)
