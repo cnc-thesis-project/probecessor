@@ -71,11 +71,19 @@ def pcap_extract(pcap_path, data):
         data_pcap["win"] = max(data_pcap.get("win", 0), p["TCP"].window)
 
 
+def print_progress(done, total):
+    print("\r", end="")
+
+    prog = (done/total)*10
+    print("[" + int(prog)*"=" + int(10-prog)*"-" + "] {0:.2f}% ({1}/{2})".format(prog*10, done, total), end="")
+    sys.stdout.flush()
+
+
 def database_extract(output, database, label_path, pcap_path):
-    print("Extract")
-    data = {}
+    host_map = {}
 
     for db_file in database:
+        print("Extracting data from {} ...".format(db_file))
         try:
             open(db_file, "r")
             dbh = sqlite3.connect(db_file)
@@ -85,71 +93,68 @@ def database_extract(output, database, label_path, pcap_path):
 
         dbh.row_factory = sqlite3.Row
 
-        c1 = dbh.cursor()
+        curse = dbh.cursor()
+        curse.execute("SELECT COUNT(*) FROM Probe;")
+        total_rows = curse.fetchone()[0]
 
-        c1.execute("SELECT DISTINCT ip FROM Probe;")
+        curse.execute("SELECT * FROM Probe;")
+
+        processed_rows = 0
+
         while True:
-            ip_row = c1.fetchone()
-            if not ip_row:
+            row = curse.fetchone()
+            print_progress(processed_rows, total_rows)
+            processed_rows += 1
+
+            if not row:
                 break
 
-            ip = ip_row["ip"]
+            ip = row["ip"]
+            if not host_map.get(ip):
+                host_map[ip] = modules.host.Host(ip)
+            module_name = row["name"]
 
-            c2 = dbh.cursor()
-            c2.execute("SELECT * FROM Probe WHERE ip = ?;", (ip,))
+            # TODO: fix tls
+            if module_name == "tls":
+                continue
 
-            probe_map = {}
-            while True:
-                probe = c2.fetchone()
-                if not probe:
-                    break
-
-                name = probe["name"]
-                port = str(probe["port"]) # store as string since json cannot have integer key anyways
-
-                if not port in probe_map:
-                    probe_map[port] = {}
-                if not name in probe_map[port]:
-                    probe_map[port][name] = []
-                probe_map[port][name].append(dict(probe))
-
-            c2.close()
-
-            for port in probe_map:
-                if not data.get(ip):
-                    data[ip] = modules.host.Host(ip)
-
-                if port == "0":
-                    # ip module stuff
-                    # TODO: use ip module processor? (Yes /b)
-                    # TODO: remove continue
+            port = row["port"]
+            if port == "0":
+                # ip module stuff
+                # TODO: use ip module processor? (Yes /b)
+                # TODO: remove continue
+                continue
+                for m in probe_map[port]:
+                    if m == "geoip":
+                        country, asn, as_desc = probe_map[port][m][0]["data"].decode().split("\t")
+                        data[ip][m] = {"country": country, "asn": int(asn), "as_desc": as_desc}
+                    else:
+                        data[ip][m] = probe_map[port][m][0]["data"].decode()
+            else:
+                # module stuff
+                port_class = modules.modules.get(module_name)
+                if not port_class:
                     continue
-                    for m in probe_map[port]:
-                        if m == "geoip":
-                            country, asn, as_desc = probe_map[port][m][0]["data"].decode().split("\t")
-                            data[ip][m] = {"country": country, "asn": int(asn), "as_desc": as_desc}
-                        else:
-                            data[ip][m] = probe_map[port][m][0]["data"].decode()
-                else:
-                    for m in probe_map[port]:
-                        # module stuff
-                        port_class = modules.modules.get(m)
-                        if not port_class:
-                            continue
-                        if m == "tls":
-                            continue
-                        else:
-                            port_obj = port_class(port)
+                port_obj = host_map[ip].ports.get(port)
+                if not port_obj:
+                    port_obj = port_class(port)
+                    host_map[ip].insert_port(port_obj)
 
-                        port_obj.populate(probe_map[port][m])
-                        data[ip].insert_port(port_obj)
+                try:
+                    port_obj.add_data(row)
+                except Exception as e:
+                    """
+                    print("Error adding data for {}:{}".format(ip, port))
+                    print(e)
+                    """
+                    #sys.exit(1)
+                    pass
 
-        c1.close()
+        curse.close()
 
     remove_ip = []
-    for ip in data:
-        pprint.pprint(data[ip].ports)
-        if len(data[ip].ports) == 0:
+    for ip in host_map:
+        if len(host_map[ip].ports) == 0:
             # TODO: add a flag that decides whether to exclude this or not
             print("{}: No ports open, omitting".format(ip))
             remove_ip.append(ip)
@@ -167,7 +172,7 @@ def database_extract(output, database, label_path, pcap_path):
         #populate_statistics(data[ip])
 
     for ip in remove_ip:
-        del data[ip]
+        del host_map[ip]
 
     if label_path:
         print("Adding labels...")
@@ -179,20 +184,22 @@ def database_extract(output, database, label_path, pcap_path):
                     continue
 
                 mwdb_id, ip, port, label = csv
-                if ip in data:
+                if ip in host_map:
                     # TODO: add the rest of the label data
-                    data[ip].add_label(label)
+                    host_map[ip].add_label(label)
 
                 line = f.readline()
 
     if pcap_path:
         print("Adding pcap data...")
-        pcap_extract(pcap_path, data)
+        pcap_extract(pcap_path, host_map)
 
 
     # TODO: serialize host object
 
-    joblib.dump(data, output)
+    print("{} IP hosts processed".format(len(host_map)))
+
+    joblib.dump(host_map, output)
 
     dbh.close()
 

@@ -7,21 +7,22 @@ import modules.port
 class HttpPort(modules.port.Port):
     def __init__(self, port):
         super().__init__("http", port)
+        self.data = {}
 
 
-    def populate(self, rows):
-        data = {}
+    def add_data(self, row):
+        if row["type"] not in probe_types:
+            return
 
-        for probe_type in probe_types:
-            row = get_type(rows, probe_type)
-            if row is not None:
-                data.update(process_probe(row))
+        self.data.update(process_probe(row))
 
-                # timing related
-                response_time = get_type(rows, probe_type + "_time")["data"].split(b" ")
-                data["{}:response_start".format(probe_type)] = float(response_time[0])
-                data["{}:response_end".format(probe_type)] = float(response_time[0])
-        self.data = data
+        # timing related
+        # TODO: yuki, pliz figz :O
+        """
+        response_time = get_type(rows, probe_type + "_time")["data"].split(b" ")
+        self.data["{}:response_start".format(probe_type)] = float(response_time[0])
+        self.data["{}:response_end".format(probe_type)] = float(response_time[0])
+        """
 
 
     def get_property(self, name):
@@ -30,10 +31,6 @@ class HttpPort(modules.port.Port):
 
     def has_property(self, name):
         return name in self.data
-
-
-    def to_dict(self):
-        return self.data
 
 
 class HttpResponse():
@@ -100,7 +97,6 @@ def process_probe(row):
         raw_headers, content = row["data"].split(b"\r\n\r\n", 1)
         request_line, headers_alone = raw_headers.split(b"\r\n", 1)
     except ValueError as e:
-        print("error:", e)
         return {}
 
     # parse first line
