@@ -17,7 +17,7 @@ class SshPort(modules.port.Port):
         self.data = {}
 
 
-    def add_data(self, rows):
+    def add_data(self, row):
         # TODO: more proper error handling
         try:
             if row["type"] == "string":
