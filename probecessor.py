@@ -306,6 +306,11 @@ def fingerprint(fp_out, data_in, method):
     if method:
         method.store_fingerprints(fp_out, data)
 
+def print_hosts(data_in):
+    hosts = joblib.load(data_in)
+    for host in hosts.values():
+        host.print_data()
+
 
 def match(data_in, fp_in, method):
     print("Loading data from {} ...".format(data_in))
@@ -326,6 +331,9 @@ if __name__ == "__main__":
     parser_extract.add_argument("--pcap-in", help="Additional pcap file.", type=str)
     parser_extract.add_argument("--db-in", help="A probeably database file.", type=str, nargs="+", required=True)
     parser_extract.add_argument("--data-out", help="Output file holding the processed host data.", type=str, required=True)
+    # sub-command print
+    parser_print = subparsers.add_parser("print", help="Print data in the processed host data.")
+    parser_print.add_argument("--data-in", help="Extracted Host data.", type=str, required=True)
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
     parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, required=True)
@@ -345,6 +353,8 @@ if __name__ == "__main__":
 
     if args.subcommand == "extract":
         database_extract(args.data_out, args.db_in, args.labels_in, args.pcap_in)
+    elif args.subcommand == "print":
+        print_hosts(args.data_in)
     elif args.subcommand == "stats":
         print_statistics(args.data_in, args.detail)
     elif args.subcommand == "fingerprint":

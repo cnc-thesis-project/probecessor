@@ -21,3 +21,11 @@ class Host():
 
     def add_label(self, label):
         self.labels.add(label)
+
+    def label_str(self, delimiter="/"):
+        return '/'.join(sorted(self.labels))
+
+    def print_data(self):
+        print("Host: {} (labels: {}, open ports: {})".format(self.ip, self.label_str(), len(self.ports)))
+        for port in self.ports.values():
+            port.print_data(indent=2)
