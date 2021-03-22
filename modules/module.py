@@ -7,6 +7,10 @@ class Module():
         raise NotImplementedError
 
 
+    def print_data(self, indent=0):
+        raise NotImplementedError
+
+
     def get_property(self, name):
         raise NotImplementedError
 

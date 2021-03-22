@@ -7,6 +7,8 @@ class Host():
         self.ip = ip
         self.ports = {}
         self.labels = []
+        self.geoip = None
+        self.rdns = None
 
 
     def insert_port(self, port):
@@ -41,6 +43,10 @@ class Host():
 
     def print_data(self):
         print("Host: {} (labels: {}, open ports: {})".format(self.ip, self.label_str(), len(self.ports)))
+        if self.geoip:
+            self.geoip.print_data(indent=2)
+        if self.rdns:
+            self.rdns.print_data(indent=2)
         for port in self.ports.values():
             port.print_data(indent=2)
         print("  Labels:")

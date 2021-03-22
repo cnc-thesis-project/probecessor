@@ -123,11 +123,15 @@ def database_extract(output, database, label_path, pcap_path):
             mod_class = modules.modules.get(module_name)
             if not mod_class:
                 continue
-            if port == "0":
+            if port == 0:
                 # ip module stuff
-                continue
                 mod_obj = mod_class()
                 mod_obj.add_data(row)
+
+                if mod_obj.name == "geoip":
+                    host_map[ip].geoip = mod_obj
+                elif mod_obj.name == "rdns":
+                    host_map[ip].rdns = mod_obj
             else:
                 # module stuff
                 port_obj = host_map[ip].ports.get(port)

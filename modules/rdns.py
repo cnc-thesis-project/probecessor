@@ -4,12 +4,27 @@ import modules.module
 class RdnsModule(modules.module.Module):
     def __init__(self):
         super().__init__("rdns")
-        self.data = {}
+        self.rdns = None
 
 
-    def add_data(row):
-        row = rows[0]
-        parts = row["data"].split(b".")
-        tld = parts[len(parts)-1]
+    def add_data(self, row):
+        self.rdns = row["data"].decode()
 
-        data["tld"] = tld
+
+    def print_data(self, indent=0):
+        print(indent*" " + "Reverse DNS: ", self.rdns)
+
+
+    def get_property(self, name):
+        if name == "rdns":
+            return self.rdns
+        return None
+
+
+    # Should return an iterable of tuples with key-value
+    def get_properties(self):
+        return [self.rdns]
+
+
+    def has_property(self, name):
+        return name == "rdns"
