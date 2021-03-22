@@ -215,7 +215,7 @@ def database_extract(output, database, label_path, pcap_path):
     # TODO: serialize host object
 
     print("{} hosts processed".format(len(host_map)))
-    print("Saving data to file {}".format(output))
+    print("Saving data to file {} ...".format(output))
 
     joblib.dump(host_map, output)
 

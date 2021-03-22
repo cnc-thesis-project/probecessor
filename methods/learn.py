@@ -288,6 +288,9 @@ def match(host):
     norm_host = normalized_host(host)
     the_host = distance_host(norm_host)
 
+    if not the_host:
+        return False
+
     for fp_host in host_fingerprints:
         if match_with(fp_host, the_host):
             print("Match found for host {}: {}".format(host.ip, fp_host["ip"]))
