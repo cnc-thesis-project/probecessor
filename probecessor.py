@@ -155,6 +155,9 @@ def database_extract(output, database, label_path, pcap_path):
         curse.close()
         print("")
 
+    # remove ip that doesn't have any ports open, or none gives any response
+    print("Filtering hosts without any ports open")
+
     remove_ip = []
     for ip in host_map:
         if len(host_map[ip].ports) == 0:
@@ -162,13 +165,12 @@ def database_extract(output, database, label_path, pcap_path):
             #print("{}: No ports open, omitting".format(ip))
             remove_ip.append(ip)
             continue
-        """
-        if sum(map(len, data[ip].ports)) == 0:
+
+        """if len(host_map[ip].responsive_ports()) == 0:
             # TODO: add a flag that decides whether to exclude this or not
             print("{}: No ports responded, omitting".format(ip))
             remove_ip.append(ip)
-            continue
-        """
+            continue"""
 
         # TODO:
         # data[ip].get_statistics()
@@ -177,8 +179,9 @@ def database_extract(output, database, label_path, pcap_path):
     for ip in remove_ip:
         del host_map[ip]
 
+    # add labels to hosts
     if label_path:
-        print("Adding labels...")
+        print("Adding labels to hosts")
         with open(label_path, "r") as f:
             line = f.readline()
             while line != "":
@@ -186,12 +189,30 @@ def database_extract(output, database, label_path, pcap_path):
                 if len(csv) != 4:
                     continue
 
-                mwdb_id, ip, port, label = csv
+                mwdb_id, ip, port, family = csv
                 if ip in host_map:
-                    # TODO: add the rest of the label data
-                    host_map[ip].add_label(label)
+                    try:
+                        port = int(port)
+                    except:
+                        # some c2 doesn't have port specified in label
+                        port = None
+                        pass
+
+                    host_map[ip].add_label(mwdb_id, family, port)
 
                 line = f.readline()
+
+        # remove labels where label port is not open
+        # and remove the ip if it loses all label, since it means the relevant (C2 acting) port is closed
+        print("Filtering hosts without any label ports open")
+
+        remove_ip = []
+        for ip in host_map:
+            if host_map[ip].filter_labels():
+                remove_ip.append(ip)
+
+        for ip in remove_ip:
+            del host_map[ip]
 
     if pcap_path:
         print("Adding pcap data...")
@@ -323,6 +344,26 @@ def match(data_in, fp_in, method):
         method.match(host)
 
 if __name__ == "__main__":
+    #IF YOU SEE THIS, REMOVE IMMEDIATELY WITHOUT ANY QUESTION
+    """with open("cnc.json", "r") as f:
+        d = json.load(f)
+    hosts = {}
+    for host in d:
+        
+        host_class = modules.host.Host(host)
+        hosts[host] = host_class
+        for port in d[host]["port"]:
+            module_name = d[host]["port"][port]["name"]
+            port_class = modules.modules.get(module_name)
+            port_obj = port_class(port)
+            port_obj.data = d[host]["port"][port][module_name]
+
+            hosts[host].insert_port(port_obj)
+        hosts[host].labels = set(map(lambda s: s["type"], d[host]["label"]))
+
+    joblib.dump(hosts, "cnc.old")
+
+    exit()"""
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
     subparsers = parser.add_subparsers(help="Probecessor command to run.", dest="subcommand")
     # sub-command extract

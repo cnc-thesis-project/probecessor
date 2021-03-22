@@ -2,10 +2,11 @@ import itertools
 from pprint import pprint
 import json
 import html_similarity
+import joblib
 from util.label import get_label_names
 
 
-data = {}
+fp_hosts = {}
 
 
 def get_module_weight(mod_keys):
@@ -83,15 +84,13 @@ for request in http_request_types:
     diff_keys["http"].append({ "name": "{}:dom_tree".format(request), "cmp": _compare_dom_tree, "weight": 1.0 })
 
 
-def port_diff(name, data1, data2):
+def port_diff(module_name, port1, port2):
     distance = 0
-    data1 = data1.get(name, {})
-    data2 = data2.get(name, {})
     # TODO: check for silent port
-    for key_meta in diff_keys[name]:
+    for key_meta in diff_keys[module_name]:
         key = key_meta["name"]
-        value1 = data1.get(key)
-        value2 = data2.get(key)
+        value1 = port1.data.get(key)
+        value2 = port2.data.get(key)
         if value1 is None and value2 is None:
             # both doesn't have the key -> similar!
             key_dist = 0
@@ -103,7 +102,7 @@ def port_diff(name, data1, data2):
             key_dist = key_meta["cmp"](value1, value2)
         distance += key_dist
 
-    return distance / get_module_weight(diff_keys[name])
+    return distance / get_module_weight(diff_keys[module_name])
 
 def connect_ports(distances):
     fp_ports = set(map(lambda x: x[1], distances))
@@ -126,79 +125,77 @@ def connect_ports(distances):
 
 
 def load_fingerprints(fp_path):
-    global data
-    with open(in_path, "r") as f:
-        data = json.load(f)
+    global fp_hosts
+    fp_hosts = joblib.load(fp_path)
 
 
 # Returns the fingerprint match. If none match, return None.
-def classify(in_path, host_data):
-
+def match(host):
     #print(data)
     #print(host_data)
 
-    ports = host_data["port"]
-
-    host_ports = {}
-    for port, port_data in host_data["port"].items():
-        if len(port_data) == 0:
+    host_module_map = {} # module type -> list of Port classes
+    for port in host.ports.values():
+        if len(port.data) == 0:
             # silent port
             continue
-        mod_name = port_data["name"]
-        if not mod_name in host_ports:
-            host_ports[mod_name] = []
-        host_ports[mod_name].append((port, port_data))
+        if not port.type in host_module_map:
+            host_module_map[port.type] = []
+        host_module_map[port.type].append(port)
 
     ip_distances = []
-    for ip, fp_data in data.items():
-        fp_ports = {}
-        for port, port_data in fp_data["port"].items():
-            if len(port_data) == 0:
+    for ip, fp in fp_hosts.items():
+        if ip == host.ip:
+            # don't perform self comparison
+            continue
+        fp_module_map = {} # module type -> list of Port classes
+        for port in fp.ports.values():
+            if len(port.data) == 0:
                 # silent port
                 continue
-            mod_name = port_data["name"]
-            if not mod_name in fp_ports:
-                fp_ports[mod_name] = []
-            fp_ports[mod_name].append((port, port_data))
+            if not port.type in fp_module_map:
+                fp_module_map[port.type] = []
+            fp_module_map[port.type].append(port)
 
         total_dist = 0
         max_dist = 0
         # list of tuple with port from both host that looks most identical, each port is only referenced once
         candidates = []
-        for mod in set(fp_ports.keys()) & set(host_ports.keys()):
+        for mod in set(fp_module_map.keys()) & set(host_module_map.keys()):
             distances = [] # list of tuple in format: (distance, fingerprint port, host port)
-            for (fp_port, fp_port_data), (host_port, host_port_data) in itertools.product(fp_ports[mod], host_ports[mod]):
+            for fp_port, host_port in itertools.product(fp_module_map[mod], host_module_map[mod]):
                 # get distance between two ports and add the result to list distances
-                dist = port_diff(mod, fp_port_data, host_port_data)
-                if "tls" in fp_port_data or "tls" in host_port_data:
-                    dist = (dist + port_diff("tls", fp_port_data, host_port_data)) / 2.0
-                distances.append((dist, fp_port, host_port))
+                dist = port_diff(mod, fp_port, host_port)
+                # TODO: FIX TLS!!!!!!!!!!!!!!!
+                #if "tls" in fp_port or "tls" in host_port:
+                #    dist = (dist + port_diff("tls", fp_port, host_port)) / 2.0
+                distances.append((dist, fp_port.port, host_port.port))
 
             c = connect_ports(distances)
             candidates.extend(c)
             total_dist += sum(map(lambda x: x[0], c))
 
         fp_port_used = list(map(lambda x: x[1], candidates))
-        fp_port_left = list(filter(lambda x: x not in fp_port_used, fp_data["port"].keys()))
+        fp_port_left = list(filter(lambda x: x not in fp_port_used, fp.ports.keys()))
 
         host_port_used = list(map(lambda x: x[2], candidates))
-        host_port_left = list(filter(lambda x: x not in host_port_used, host_data["port"].keys()))
+        host_port_left = list(filter(lambda x: x not in host_port_used, host.ports.keys()))
 
         # calculate the maximum possible distance
         for _, fp_port, host_port in candidates:
             # calculation for ports that was in both
-            fp_port_data = fp_data["port"][fp_port]
-            host_port_data = host_data["port"][host_port]
+            fp_port_data = fp.ports[fp_port]
+            host_port_data = host.ports[host_port]
 
             max_dist += 1
             #if "tls" in fp_port_data or "tls" in host_port_data:
             #    max_dist += 1
 
         # calculation for ports that was only available in either one
-        for data, port_left in [(fp_data, fp_port_left), (host_data, host_port_left)]:
+        for data, port_left in [(fp, fp_port_left), (host, host_port_left)]:
             for port in port_left:
-                port_data = data["port"][port]
-                mod = port_data.get("name")
+                port_data = data.ports[port]
+                mod = port_data.type
 
                 total_dist += 1
                 max_dist += 1
@@ -212,10 +209,10 @@ def classify(in_path, host_data):
         #print("Total distance: {}/{}".format(total_dist, max_dist))
 
         # normalize total distance to value betweeon 0.0 - 1.0
-        total_dist /= max_dist #* len(set(fp_ports.keys()) | set(host_ports.keys()))
+        total_dist /= max_dist #* len(set(fp_module_map.keys()) | set(host_module_map.keys()))
 
         # get labels
-        labels = get_label_names(fp_data)
+        labels = fp.label_str()
 
         ip_distances.append((total_dist, ip, labels))
         #print("Distance {} to {} ({})".format(total_dist, ip, labels))
