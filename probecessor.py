@@ -10,7 +10,7 @@ from util.label import get_label_names
 from scapy.all import PcapReader
 import modules.host
 import joblib
-
+import math
 
 def populate_statistics(host):
     ip_data["stats"] = {}
@@ -75,7 +75,7 @@ def print_progress(done, total):
     print("\r", end="")
 
     prog = (done/total)*10
-    print("[" + int(prog)*"=" + int(10-prog)*"-" + "] {0:.2f}% ({1}/{2})".format(prog*10, done, total), end="")
+    print("[" + int(prog)*"=" + math.ceil(10-prog)*"-" + "] {0:.2f}% ({1}/{2})".format(prog*10, done, total), end="")
     sys.stdout.flush()
 
 
@@ -343,26 +343,6 @@ def match(data_in, fp_in, method):
         method.match(host)
 
 if __name__ == "__main__":
-    #IF YOU SEE THIS, REMOVE IMMEDIATELY WITHOUT ANY QUESTION
-    """with open("cnc.json", "r") as f:
-        d = json.load(f)
-    hosts = {}
-    for host in d:
-        
-        host_class = modules.host.Host(host)
-        hosts[host] = host_class
-        for port in d[host]["port"]:
-            module_name = d[host]["port"][port]["name"]
-            port_class = modules.modules.get(module_name)
-            port_obj = port_class(port)
-            port_obj.data = d[host]["port"][port][module_name]
-
-            hosts[host].insert_port(port_obj)
-        hosts[host].labels = set(map(lambda s: s["type"], d[host]["label"]))
-
-    joblib.dump(hosts, "cnc.old")
-
-    exit()"""
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
     subparsers = parser.add_subparsers(help="Probecessor command to run.", dest="subcommand")
     # sub-command extract
