@@ -158,12 +158,12 @@ def database_extract(output, database, label_path, pcap_path):
     # remove ip that doesn't have any ports open, or none gives any response
     print("Filtering hosts without any ports open")
 
-    remove_ip = []
+    remove_ip = set()
     for ip in host_map:
         if len(host_map[ip].ports) == 0:
             # TODO: add a flag that decides whether to exclude this or not
             #print("{}: No ports open, omitting".format(ip))
-            remove_ip.append(ip)
+            remove_ip.add(ip)
             continue
 
         """if len(host_map[ip].responsive_ports()) == 0:
@@ -178,6 +178,7 @@ def database_extract(output, database, label_path, pcap_path):
 
     for ip in remove_ip:
         del host_map[ip]
+    print("Filtered {} hosts".format(len(remove_ip)))
 
     # add labels to hosts
     if label_path:
@@ -206,13 +207,14 @@ def database_extract(output, database, label_path, pcap_path):
         # and remove the ip if it loses all label, since it means the relevant (C2 acting) port is closed
         print("Filtering hosts without any label ports open")
 
-        remove_ip = []
+        remove_ip = set()
         for ip in host_map:
             if host_map[ip].filter_labels():
-                remove_ip.append(ip)
+                remove_ip.add(ip)
 
         for ip in remove_ip:
             del host_map[ip]
+        print("Filtered {} hosts".format(len(remove_ip)))
 
     if pcap_path:
         print("Adding pcap data...")
