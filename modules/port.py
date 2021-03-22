@@ -7,3 +7,8 @@ class Port(modules.module.Module):
         # The type of port, e.g. "http".
         self.type = port_type
         self.port = port_num
+
+    def print_data(self, indent=0):
+        print("{}Port: {} ({})".format(" " * indent, self.port, self.type))
+        for key, value in self.data.items():
+            print("{}Key: {}, Value: {}".format(" " * (indent + 2), key, value))

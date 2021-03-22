@@ -12,18 +12,13 @@ class HttpPort(modules.port.Port):
 
     def add_data(self, row):
         if row["type"] not in probe_types:
+            if row["type"].endswith("_time"):
+                response_time = row["data"].split(b" ")
+                self.data["{}:response_start".format(row["type"])] = float(response_time[0])
+                self.data["{}:response_end".format(row["type"])] = float(response_time[1])
             return
 
         self.data.update(process_probe(row))
-
-        # timing related
-        # TODO: yuki, pliz figz :O
-        """
-        response_time = get_type(rows, probe_type + "_time")["data"].split(b" ")
-        self.data["{}:response_start".format(probe_type)] = float(response_time[0])
-        self.data["{}:response_end".format(probe_type)] = float(response_time[0])
-        """
-
 
     def get_property(self, name):
         return self.data.get(name)

@@ -8,6 +8,6 @@ modules = {
     "http": modules.http.HttpPort,
     "ssh": modules.ssh.SshPort,
 #    "rdns": modules.rdns.RdnsModule,
-#    "unknown": modules.unknown.UnknownModule,
+    "unknown": modules.unknown.UnknownPort,
     "tls": modules.tls.TlsPort,
 }

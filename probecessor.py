@@ -10,7 +10,7 @@ from util.label import get_label_names
 from scapy.all import PcapReader
 import modules.host
 import joblib
-
+import math
 
 def populate_statistics(host):
     ip_data["stats"] = {}
@@ -75,7 +75,7 @@ def print_progress(done, total):
     print("\r", end="")
 
     prog = (done/total)*10
-    print("[" + int(prog)*"=" + int(10-prog)*"-" + "] {0:.2f}% ({1}/{2})".format(prog*10, done, total), end="")
+    print("[" + int(prog)*"=" + math.ceil(10-prog)*"-" + "] {0:.2f}% ({1}/{2})".format(prog*10, done, total), end="")
     sys.stdout.flush()
 
 
@@ -111,9 +111,6 @@ def database_extract(output, database, label_path, pcap_path):
 
             ip = row["ip"]
 
-            # TODO: remove the below shist
-            if int(ip.split(".")[3]) % 4 != 0:
-                continue
             if not host_map.get(ip):
                 host_map[ip] = modules.host.Host(ip)
             module_name = row["name"]
@@ -155,20 +152,22 @@ def database_extract(output, database, label_path, pcap_path):
         curse.close()
         print("")
 
-    remove_ip = []
+    # remove ip that doesn't have any ports open, or none gives any response
+    print("Filtering hosts without any ports open")
+
+    remove_ip = set()
     for ip in host_map:
         if len(host_map[ip].ports) == 0:
             # TODO: add a flag that decides whether to exclude this or not
             #print("{}: No ports open, omitting".format(ip))
-            remove_ip.append(ip)
+            remove_ip.add(ip)
             continue
-        """
-        if sum(map(len, data[ip].ports)) == 0:
+
+        """if len(host_map[ip].responsive_ports()) == 0:
             # TODO: add a flag that decides whether to exclude this or not
             print("{}: No ports responded, omitting".format(ip))
             remove_ip.append(ip)
-            continue
-        """
+            continue"""
 
         # TODO:
         # data[ip].get_statistics()
@@ -176,9 +175,11 @@ def database_extract(output, database, label_path, pcap_path):
 
     for ip in remove_ip:
         del host_map[ip]
+    print("Filtered {} hosts".format(len(remove_ip)))
 
+    # add labels to hosts
     if label_path:
-        print("Adding labels...")
+        print("Adding labels to hosts")
         with open(label_path, "r") as f:
             line = f.readline()
             while line != "":
@@ -186,12 +187,31 @@ def database_extract(output, database, label_path, pcap_path):
                 if len(csv) != 4:
                     continue
 
-                mwdb_id, ip, port, label = csv
+                mwdb_id, ip, port, family = csv
                 if ip in host_map:
-                    # TODO: add the rest of the label data
-                    host_map[ip].add_label(label)
+                    try:
+                        port = int(port)
+                    except:
+                        # some c2 doesn't have port specified in label
+                        port = None
+                        pass
+
+                    host_map[ip].add_label(mwdb_id, family, port)
 
                 line = f.readline()
+
+        # remove labels where label port is not open
+        # and remove the ip if it loses all label, since it means the relevant (C2 acting) port is closed
+        print("Filtering hosts without any label ports open")
+
+        remove_ip = set()
+        for ip in host_map:
+            if host_map[ip].filter_labels():
+                remove_ip.add(ip)
+
+        for ip in remove_ip:
+            del host_map[ip]
+        print("Filtered {} hosts".format(len(remove_ip)))
 
     if pcap_path:
         print("Adding pcap data...")
@@ -306,6 +326,11 @@ def fingerprint(fp_out, data_in, method):
     if method:
         method.store_fingerprints(fp_out, data)
 
+def print_hosts(data_in):
+    hosts = joblib.load(data_in)
+    for host in hosts.values():
+        host.print_data()
+
 
 def match(data_in, fp_in, method):
     print("Loading data from {} ...".format(data_in))
@@ -326,6 +351,9 @@ if __name__ == "__main__":
     parser_extract.add_argument("--pcap-in", help="Additional pcap file.", type=str)
     parser_extract.add_argument("--db-in", help="A probeably database file.", type=str, nargs="+", required=True)
     parser_extract.add_argument("--data-out", help="Output file holding the processed host data.", type=str, required=True)
+    # sub-command print
+    parser_print = subparsers.add_parser("print", help="Print data in the processed host data.")
+    parser_print.add_argument("--data-in", help="Extracted Host data.", type=str, required=True)
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
     parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, required=True)
@@ -345,6 +373,8 @@ if __name__ == "__main__":
 
     if args.subcommand == "extract":
         database_extract(args.data_out, args.db_in, args.labels_in, args.pcap_in)
+    elif args.subcommand == "print":
+        print_hosts(args.data_in)
     elif args.subcommand == "stats":
         print_statistics(args.data_in, args.detail)
     elif args.subcommand == "fingerprint":
