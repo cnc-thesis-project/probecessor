@@ -120,25 +120,19 @@ def database_extract(output, database, label_path, pcap_path):
                 continue
 
             port = row["port"]
+            mod_class = modules.modules.get(module_name)
+            if not mod_class:
+                continue
             if port == "0":
                 # ip module stuff
-                # TODO: use ip module processor? (Yes /b)
-                # TODO: remove continue
                 continue
-                for m in probe_map[port]:
-                    if m == "geoip":
-                        country, asn, as_desc = probe_map[port][m][0]["data"].decode().split("\t")
-                        data[ip][m] = {"country": country, "asn": int(asn), "as_desc": as_desc}
-                    else:
-                        data[ip][m] = probe_map[port][m][0]["data"].decode()
+                mod_obj = mod_class()
+                mod_obj.add_data(row)
             else:
                 # module stuff
-                port_class = modules.modules.get(module_name)
-                if not port_class:
-                    continue
                 port_obj = host_map[ip].ports.get(port)
                 if not port_obj:
-                    port_obj = port_class(port)
+                    port_obj = mod_class(port)
                     host_map[ip].insert_port(port_obj)
 
                 try:

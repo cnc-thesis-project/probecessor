@@ -6,7 +6,7 @@ from pprint import pprint
 import sys
 from util.label import get_label_names
 
-NUM_CLUSTERS = 30
+NUM_CLUSTERS = 20
 
 module_X = {
     "http": [],
@@ -29,18 +29,20 @@ def list_to_order_list(li, desc):
 
 
 def _normalize_status_code(code):
+    if code is None:
+        return [-1]
     return [code/100]
 
 
 def _normalize_header_keys(headers):
     header_keys = {
-        "Server": 0,
-        "Content-Type": 1,
-        "Date": 2,
-        "Content-Length": 3,
-        "Connection": 4,
+        "server": 0,
+        "content-type": 1,
+        "date": 2,
+        "content-length": 3,
+        "connection": 4,
     }
-    return list_to_order_list(headers, header_keys)
+    return list_to_order_list(list(map(str.lower, headers)), header_keys)
 
 
 def _normalize_kex_algorithms(arr):
@@ -287,7 +289,7 @@ def match(host):
 
     for fp_host in host_fingerprints:
         if match_with(fp_host, the_host):
-            print("Match found for host {}: {}".format(host.ip, fp_host["labels"]))
+            print("Match found for host {}: {}".format(host.ip, fp_host))
             return True
 
     print("No match found for host {}".format(host.ip))
