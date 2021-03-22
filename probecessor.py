@@ -320,6 +320,7 @@ def fingerprint(fp_out, data_in, method):
     if method:
         method.store_fingerprints(fp_out, data)
 
+
 def print_hosts(data_in):
     hosts = joblib.load(data_in)
     for host in hosts.values():
@@ -332,9 +333,9 @@ def match(data_in, fp_in, method):
     method = methods.methods[method]
     method.load_fingerprints(fp_in)
     for ip, host in data.items():
-        #labels = get_label_names(host_data)
         print("Attempting to match host {} against fingerprinted hosts".format(ip))
         method.match(host)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")

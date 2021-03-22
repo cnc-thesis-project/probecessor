@@ -11,5 +11,10 @@ class Module():
         raise NotImplementedError
 
 
+    # Should return an iterable of tuples with key-value
+    def get_properties(self):
+        raise NotImplementedError
+
+
     def has_property(self, name):
         raise NotImplementedError

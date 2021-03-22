@@ -188,6 +188,7 @@ def store_fingerprints(out_path, data):
 
     for host in data.values():
         norm_host = normalized_host(host)
+        norm_host["ip"] = host.ip
         norm_hosts.append(norm_host)
         for norm_port in norm_host["ports"].values():
             module_X[norm_port["type"]].append(norm_port["vector"])
@@ -281,7 +282,7 @@ def match_with(host1, host2):
 # Match the host against the fingerprints
 def match(host):
     if len(host.labels) > 0:
-        print("Matching labeled host {} ({}) to fingerprints".format(host.ip, host.labels))
+        print("Matching labeled host {} ({}) to fingerprints".format(host.ip, host.label_str()))
     else:
         print("Matching host {} to fingerprints".format(host.ip))
     norm_host = normalized_host(host)
@@ -289,7 +290,7 @@ def match(host):
 
     for fp_host in host_fingerprints:
         if match_with(fp_host, the_host):
-            print("Match found for host {}: {}".format(host.ip, fp_host))
+            print("Match found for host {}: {}".format(host.ip, fp_host["ip"]))
             return True
 
     print("No match found for host {}".format(host.ip))

@@ -24,6 +24,10 @@ class HttpPort(modules.port.Port):
         return self.data.get(name)
 
 
+    def get_properties(self):
+        return self.data.items()
+
+
     def has_property(self, name):
         return name in self.data
 
@@ -145,7 +149,7 @@ def process_probe(row):
     probe_type = row["type"]
 
     try:
-		# TODO: IIS server is dick and may return decimals in status_code :shrug:
+        # TODO: IIS server is dick and may return decimals in status_code :shrug:
         data["{}:status_code".format(probe_type)] = float(status_code)
     except TypeError:
         data["{}:status_code".format(probe_type)] = None

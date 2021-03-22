@@ -36,6 +36,10 @@ class SshPort(modules.port.Port):
         return self.data.get(name)
 
 
+    def get_properties(self):
+        return self.data.items()
+
+
     def has_property(self, name):
         return name in self.data
 
