@@ -7,7 +7,16 @@ class Module():
         raise NotImplementedError
 
 
+    def print_data(self, indent=0):
+        raise NotImplementedError
+
+
     def get_property(self, name):
+        raise NotImplementedError
+
+
+    # Should return an iterable of tuples with key-value
+    def get_properties(self):
         raise NotImplementedError
 
 

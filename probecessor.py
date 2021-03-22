@@ -120,25 +120,23 @@ def database_extract(output, database, label_path, pcap_path):
                 continue
 
             port = row["port"]
-            if port == "0":
-                # ip module stuff
-                # TODO: use ip module processor? (Yes /b)
-                # TODO: remove continue
+            mod_class = modules.modules.get(module_name)
+            if not mod_class:
                 continue
-                for m in probe_map[port]:
-                    if m == "geoip":
-                        country, asn, as_desc = probe_map[port][m][0]["data"].decode().split("\t")
-                        data[ip][m] = {"country": country, "asn": int(asn), "as_desc": as_desc}
-                    else:
-                        data[ip][m] = probe_map[port][m][0]["data"].decode()
+            if port == 0:
+                # ip module stuff
+                mod_obj = mod_class()
+                mod_obj.add_data(row)
+
+                if mod_obj.name == "geoip":
+                    host_map[ip].geoip = mod_obj
+                elif mod_obj.name == "rdns":
+                    host_map[ip].rdns = mod_obj
             else:
                 # module stuff
-                port_class = modules.modules.get(module_name)
-                if not port_class:
-                    continue
                 port_obj = host_map[ip].ports.get(port)
                 if not port_obj:
-                    port_obj = port_class(port)
+                    port_obj = mod_class(port)
                     host_map[ip].insert_port(port_obj)
 
                 try:
@@ -221,7 +219,7 @@ def database_extract(output, database, label_path, pcap_path):
     # TODO: serialize host object
 
     print("{} hosts processed".format(len(host_map)))
-    print("Saving data to file {}".format(output))
+    print("Saving data to file {} ...".format(output))
 
     joblib.dump(host_map, output)
 
@@ -326,6 +324,7 @@ def fingerprint(fp_out, data_in, method):
     if method:
         method.store_fingerprints(fp_out, data)
 
+
 def print_hosts(data_in):
     hosts = joblib.load(data_in)
     for host in hosts.values():
@@ -338,9 +337,9 @@ def match(data_in, fp_in, method):
     method = methods.methods[method]
     method.load_fingerprints(fp_in)
     for ip, host in data.items():
-        #labels = get_label_names(host_data)
         print("Attempting to match host {} against fingerprinted hosts".format(ip))
         method.match(host)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")

@@ -10,5 +10,5 @@ class Port(modules.module.Module):
 
     def print_data(self, indent=0):
         print("{}Port: {} ({})".format(" " * indent, self.port, self.type))
-        for key, value in self.data.items():
+        for key, value in self.get_properties():
             print("{}Key: {}, Value: {}".format(" " * (indent + 2), key, value))
