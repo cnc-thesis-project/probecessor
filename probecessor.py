@@ -111,9 +111,6 @@ def database_extract(output, database, label_path, pcap_path):
 
             ip = row["ip"]
 
-            # TODO: remove the below shist
-            if int(ip.split(".")[3]) % 4 != 0:
-                continue
             if not host_map.get(ip):
                 host_map[ip] = modules.host.Host(ip)
             module_name = row["name"]
