@@ -150,7 +150,7 @@ def process_probe(row):
     except TypeError:
         data["{}:status_code".format(probe_type)] = None
     try:
-        data["{}:status_text".format(probe_type)] = status_text.decode(charset)
+        data["{}:status_text".format(probe_type)] = status_text
     except AttributeError:
         data["{}:status_text".format(probe_type)] = None
     try:
