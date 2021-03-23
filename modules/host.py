@@ -47,6 +47,8 @@ class Host():
             self.geoip.print_data(indent=2)
         if self.rdns:
             self.rdns.print_data(indent=2)
+        if self.tls:
+            self.tls.print_data(indent=2)
         for port in self.ports.values():
             port.print_data(indent=2)
         print("  Labels:")
