@@ -46,5 +46,6 @@ class TlsPort(modules.module.Module):
 
     def print_data(self, indent=0):
         keys = ["subject", "issuer", "sign_alg", "hash_alg", "key_size", "key_sha1", "self_issued", "self_signed", "valid_domains", "valid_ips", "not_before", "not_after", "valid_period", "jarm"]
+        print(indent*" " + "TLS:")
         for key in keys:
-            print(indent*" {}: {}".format(key, self.data[key]))
+            print((indent+2)*" " + "{}: {}".format(key, self.data[key]))
