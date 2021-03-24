@@ -14,7 +14,7 @@ class GeoipModule(modules.module.Module):
 
 
     def print_data(self, indent=0):
-        print(indent*" " + "Country: {}, ASN: {} ()".format(self.data["country"], self.data["asn"], self.data["as_desc"]))
+        print(indent*" " + "Country: {}, ASN: {} ({})".format(self.data["country"], self.data["asn"], self.data["as_desc"]))
 
 
     def get_property(self, name):

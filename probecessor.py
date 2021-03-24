@@ -81,6 +81,7 @@ def print_progress(done, total):
 
 def database_extract(output, database, label_path, pcap_path):
     host_map = {}
+    tls_map = {}
 
     for db_file in database:
         print("Extracting data from {} ...".format(db_file))
@@ -115,10 +116,6 @@ def database_extract(output, database, label_path, pcap_path):
                 host_map[ip] = modules.host.Host(ip)
             module_name = row["name"]
 
-            # TODO: fix tls
-            if module_name == "tls":
-                continue
-
             port = row["port"]
             mod_class = modules.modules.get(module_name)
             if not mod_class:
@@ -134,10 +131,16 @@ def database_extract(output, database, label_path, pcap_path):
                     host_map[ip].rdns = mod_obj
             else:
                 # module stuff
-                port_obj = host_map[ip].ports.get(port)
-                if not port_obj:
-                    port_obj = mod_class(port)
-                    host_map[ip].insert_port(port_obj)
+                if module_name == "tls":
+                    port_obj = tls_map.get("{}:{}".format(ip, port))
+                    if not port_obj:
+                        port_obj = mod_class()
+                        tls_map["{}:{}".format(ip, port)] = port_obj
+                else:
+                    port_obj = host_map[ip].ports.get(port)
+                    if not port_obj:
+                        port_obj = mod_class(port)
+                        host_map[ip].insert_port(port_obj)
 
                 try:
                     port_obj.add_data(row)
@@ -149,6 +152,16 @@ def database_extract(output, database, label_path, pcap_path):
 
         curse.close()
         print("")
+
+    # adding tls module to ports
+    for ip_port, tls in tls_map.items():
+        ip, port = ip_port.split(":")
+        port = int(port)
+        port_obj = host_map[ip].ports.get(port)
+        if not port_obj:
+            port_obj = modules.modules.get("unknown")(port)
+            host_map[ip].insert_port(port_obj)
+        port_obj.tls = tls
 
     # remove ip that doesn't have any ports open, or none gives any response
     print("Filtering hosts without any ports open")
