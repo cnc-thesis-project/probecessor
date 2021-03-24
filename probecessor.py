@@ -350,7 +350,7 @@ def match(data_in, fp_in, method):
     method = methods.methods[method]
     method.load_fingerprints(fp_in)
     for ip, host in data.items():
-        print("Attempting to match host {} against fingerprinted hosts".format(ip))
+        print("Attempting to match host {} ({}) against fingerprinted hosts".format(ip, host.label_str()))
         method.match(host)
 
 
