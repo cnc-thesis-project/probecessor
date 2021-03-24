@@ -38,9 +38,7 @@ def populate_statistics(host):
         if ip_data["port"][port].get("tls", False):
             ip_data["stats"]["tls"] += 1
 
-def pcap_extract(pcap_path, data):
-    # TODO: Examine if this is solved well
-    return
+def pcap_extract(pcap_path, hosts):
     for p in PcapReader(pcap_path):
         # we are only interested in syn-ack packet
         if not "TCP" in p:
@@ -49,7 +47,7 @@ def pcap_extract(pcap_path, data):
             continue
 
         ip = p["IP"].src
-        if not ip in data:
+        if not ip in hosts:
             continue
 
         ttl = p.ttl
@@ -69,6 +67,7 @@ def pcap_extract(pcap_path, data):
         data_pcap["ttl"] = max(data_pcap.get("ttl", 0), ttl)
         data_pcap["mss"] = max(data_pcap.get("mss", 0), mss)
         data_pcap["win"] = max(data_pcap.get("win", 0), p["TCP"].window)
+        hosts[ip].pcap = data_pcap
 
 
 def print_progress(done, total):

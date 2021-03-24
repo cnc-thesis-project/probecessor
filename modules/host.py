@@ -9,6 +9,7 @@ class Host():
         self.labels = []
         self.geoip = None
         self.rdns = None
+        self.pcap = None
 
 
     def insert_port(self, port):

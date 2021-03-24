@@ -4,7 +4,6 @@ import math
 import joblib
 from pprint import pprint
 import sys
-from util.label import get_label_names
 
 NUM_CLUSTERS = 20
 
@@ -168,17 +167,14 @@ def extract_vector(port):
 # a dictionary containing the port feature vectors.
 def normalized_host(host):
     norm = {"ports":{}}
-    norm["labels"] = host.labels
+    norm["labels"] = host.label_str()
     for port in host.ports.values():
         port_num = port.port
-        if port.type == "unknown":
-            continue
 
         norm["ports"][port_num] = {}
         # Extract vector for this port to use for clustering.
         norm["ports"][port_num]["vector"] = extract_vector(port)
         norm["ports"][port_num]["type"] = port.type
-    #norm["labels"] = get_label_names(host)
     return norm
 
 
@@ -270,8 +266,9 @@ def match_with(host1, host2):
             cluster2 = port2.get("cluster")
             # TODO: sometimes the cluster does not exist because of training failure
             # which is the result of too few samples.
-            if not cluster1 or not cluster2:
-                continue
+
+            #if not cluster1 or not cluster2:
+            #    continue
             if cluster1 != cluster2:
                 return False
         else:
@@ -281,10 +278,6 @@ def match_with(host1, host2):
 
 # Match the host against the fingerprints
 def match(host):
-    if len(host.labels) > 0:
-        print("Matching labeled host {} ({}) to fingerprints".format(host.ip, host.label_str()))
-    else:
-        print("Matching host {} to fingerprints".format(host.ip))
     norm_host = normalized_host(host)
     the_host = distance_host(norm_host)
 
@@ -293,8 +286,8 @@ def match(host):
 
     for fp_host in host_fingerprints:
         if match_with(fp_host, the_host):
-            print("Match found for host {}: {}".format(host.ip, fp_host["ip"]))
+            print("Match found for host {}: {} ({})".format(host.ip, fp_host["ip"], fp_host["labels"]))
             return True
 
-    print("No match found for host {}".format(host.ip))
+    #print("No match found for host {}".format(host.ip))
     return False
