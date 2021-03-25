@@ -338,10 +338,52 @@ def fingerprint(fp_out, data_in, method):
         method.store_fingerprints(fp_out, data)
 
 
-def print_hosts(data_in):
+def print_hosts(data_in, method):
     hosts = joblib.load(data_in)
-    for host in hosts.values():
-        host.print_data()
+    if method == "data":
+        for host in hosts.values():
+            host.print_data()
+    elif method == "jarm":
+        # count jarm occurence
+        jarm_map = {}
+        # count jarm occurence of each label
+        label_map = {}
+        for host in hosts.values():
+            for tls_port in [port for port in host.ports.values() if port.tls]:
+                tls = tls_port.tls
+                jarm = tls.get_property("jarm")
+
+                # count jarm occurence
+                if jarm not in jarm_map:
+                    jarm_map[jarm] = 1
+                else:
+                    jarm_map[jarm] += 1
+
+                # count jarm occurence in each label
+                labels = set(map(lambda l: l.label + (" (no port)" if not l.port else ""), host.get_port_label(tls_port.port)))
+                if len(labels) == 0:
+                    labels = set(["unlabeled"])
+                for label in labels:
+                    if label not in label_map:
+                        label_map[label] = {}
+                    if jarm not in label_map[label]:
+                        label_map[label][jarm] = 1
+                    else:
+                        label_map[label][jarm] += 1
+
+        # print stats
+        print("JARM occurences")
+        for jarm, count in sorted(jarm_map.items(), key=lambda item: item[1], reverse=True):
+            labels = []
+            for label in label_map:
+                if jarm in label_map[label]:
+                    labels.append(label)
+            print("{}: {} ({})".format(jarm, count, '/'.join(labels)))
+
+        for label in label_map:
+            print("JARM occurences in {}:".format(label))
+            for jarm, count in sorted(label_map[label].items(), key=lambda item: item[1], reverse=True):
+                print("  {}: {}".format(jarm, count))
 
 
 def match(data_in, fp_in, method):
@@ -366,6 +408,7 @@ if __name__ == "__main__":
     # sub-command print
     parser_print = subparsers.add_parser("print", help="Print data in the processed host data.")
     parser_print.add_argument("--data-in", help="Extracted Host data.", type=str, required=True)
+    parser_print.add_argument("--method", help="Information to print.", type=str, default="data", choices=["data", "jarm"])
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
     parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, required=True)
@@ -386,7 +429,7 @@ if __name__ == "__main__":
     if args.subcommand == "extract":
         database_extract(args.data_out, args.db_in, args.labels_in, args.pcap_in)
     elif args.subcommand == "print":
-        print_hosts(args.data_in)
+        print_hosts(args.data_in, args.method)
     elif args.subcommand == "stats":
         print_statistics(args.data_in, args.detail)
     elif args.subcommand == "fingerprint":
