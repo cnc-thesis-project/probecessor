@@ -4,6 +4,7 @@ import json
 import html_similarity
 import joblib
 from util.label import get_label_names
+import textdistance
 
 dist_threshold = 0.50
 same_port_num = True
@@ -19,23 +20,15 @@ def _compare_equal(value1, value2):
 
 def _compare_entropy(value1, value2):
     # set the distance as entropy diff, but up to 1.0
-    return min(abs(value1 - value2), 1)
+n    return min(abs(value1 - value2), 1)
 
-def _compare_header_keys(value1, value2):
-    #if value1 is None:
-    #    value1 = []
-    #if value2 is None:
-    #    value2 = []
-    if ".".join(value1) == ".".join(value2):
-        return 0
-    else:
-        return 1
+def _compare_histogram(value1, value2):
+    return sum(map(lambda v: abs(v[0] - v[1]), zip(value1, value2))) / 2
+
+def _compare_keys(value1, value2):
+    return textdistance.levenshtein.distance(value1, value2) / textdistance.levenshtein.maximum(value1, value2)
 
 def _compare_dom_tree(value1, value2):
-    #if value1 is None:
-    #    value1 = ""
-    #if value2 is None:
-    #    value2 = ""
     if value1 == value2:
         return 0
     try:
@@ -48,12 +41,12 @@ diff_keys = {
         # populated at runtime using code
     ],
     "ssh": [
-        { "name": "ciphers:kex_algorithms", "cmp": _compare_equal, "weight": 1.0 },
-        { "name": "ciphers:server_host_key_algorithms", "cmp": _compare_equal, "weight": 1.0 },
-        { "name": "ciphers:encryption_algorithms_client_to_server", "cmp": _compare_equal, "weight": 1.0 },
-        { "name": "ciphers:encryption_algorithms_server_to_client", "cmp": _compare_equal, "weight": 1.0 },
-        { "name": "ciphers:mac_algorithms_client_to_server", "cmp": _compare_equal, "weight": 1.0 },
-        { "name": "ciphers:mac_algorithms_server_to_client", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "ciphers:kex_algorithms", "cmp": _compare_keys, "weight": 1.0 },
+        { "name": "ciphers:server_host_key_algorithms", "cmp": _compare_keys, "weight": 1.0 },
+        { "name": "ciphers:encryption_algorithms_client_to_server", "cmp": _compare_keys, "weight": 1.0 },
+        { "name": "ciphers:encryption_algorithms_server_to_client", "cmp": _compare_keys, "weight": 1.0 },
+        { "name": "ciphers:mac_algorithms_client_to_server", "cmp": _compare_keys, "weight": 1.0 },
+        { "name": "ciphers:mac_algorithms_server_to_client", "cmp": _compare_keys, "weight": 1.0 },
     ],
     "tls": [
         { "name": "subject", "cmp": _compare_equal, "weight": 1.0 },
@@ -73,15 +66,16 @@ diff_keys = {
     "unknown": [
         { "name": "sha256", "cmp": _compare_equal, "weight": 1.0 },
         { "name": "entropy", "cmp": _compare_entropy, "weight": 1.0 },
+        { "name": "histogram", "cmp": _compare_histogram, "weight": 1.0 },
     ]
 }
 
 http_request_types = ["get_root", "head_root", "delete_root", "very_simple_get", "not_exist",
                 "invalid_version", "invalid_protocol", "long_path", "get_favicon", "get_robots"]
 for request in http_request_types:
-    diff_keys["http"].append({ "name": "{}:header:Server".format(request), "cmp": _compare_header_keys, "weight": 1.0 })
-    diff_keys["http"].append({ "name": "{}:header:Content-Type".format(request), "cmp": _compare_header_keys, "weight": 1.0 })
-    diff_keys["http"].append({ "name": "{}:header_keys".format(request), "cmp": _compare_header_keys, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:header:Server".format(request), "cmp": _compare_equal, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:header:Content-Type".format(request), "cmp": _compare_equal, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:header_keys".format(request), "cmp": _compare_keys, "weight": 1.0 })
     diff_keys["http"].append({ "name": "{}:status_code".format(request), "cmp": _compare_equal, "weight": 1.0 })
     diff_keys["http"].append({ "name": "{}:dom_tree".format(request), "cmp": _compare_dom_tree, "weight": 1.0 })
 
