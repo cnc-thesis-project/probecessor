@@ -385,14 +385,18 @@ def print_hosts(data_in, method):
                 print("  {}: {}".format(jarm, count))
 
 
-def match(data_in, fp_in, method):
+def match(data_in, fp_in, method, force=False):
     print("Loading data from {} ...".format(data_in))
     data = joblib.load(data_in)
     method = methods.methods[method]
     method.load_fingerprints(fp_in)
+    num_matched = 0
     for ip, host in data.items():
         print("Attempting to match host {} ({}) against fingerprinted hosts".format(ip, host.label_str()))
-        method.match(host)
+        if method.match(host, force):
+            num_matched += 1
+
+    print("Number of hosts matched:", num_matched, "of", len(data))
 
 
 if __name__ == "__main__":
@@ -422,6 +426,7 @@ if __name__ == "__main__":
     parser_match.add_argument("--fp-in", help="Fingerprints to use for matching.", type=str, required=True)
     parser_match.add_argument("--data-in", help="Data file to match with.", type=str, required=True)
     parser_match.add_argument("--method", help="Method to use for matching.", type=str, default="learn", choices=methods.methods.keys())
+    parser_match.add_argument("--force", help="Force comparison of two hosts even if they share IP address.", action="store_true", default=False)
 
     args = parser.parse_args()
 
@@ -434,4 +439,4 @@ if __name__ == "__main__":
     elif args.subcommand == "fingerprint":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
-        match(args.data_in, args.fp_in, args.method)
+        match(args.data_in, args.fp_in, args.method, args.force)

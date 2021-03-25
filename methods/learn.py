@@ -168,6 +168,7 @@ def extract_vector(port):
 def normalized_host(host):
     norm = {"ports":{}}
     norm["labels"] = host.label_str()
+    norm["ip"] = host.ip
     for port in host.ports.values():
         port_num = port.port
 
@@ -184,10 +185,13 @@ def store_fingerprints(out_path, data):
 
     for host in data.values():
         norm_host = normalized_host(host)
-        norm_host["ip"] = host.ip
         norm_hosts.append(norm_host)
         for norm_port in norm_host["ports"].values():
-            module_X[norm_port["type"]].append(norm_port["vector"])
+            vectors = module_X.get(norm_port["type"])
+            if vectors is None:
+                print("error: No vectors list for '{}'".format(norm_port["type"]))
+                continue
+            vectors.append(norm_port["vector"])
 
     # Train models
     for m, X in module_X.items():
@@ -207,12 +211,8 @@ def store_fingerprints(out_path, data):
         module_models[m] = clt
 
     for norm_host in norm_hosts:
-        for port, norm_port in norm_host["ports"].items():
-            # TODO: Fix this inefficient code plz :o
-            model = module_models.get(norm_port["type"])
-            if not model:
-                continue
-            norm_host["ports"][port]["cluster"] = model.predict([norm_port["vector"]])[0]
+        # Pliz figz dis inefficient code :o
+        cluster_normalized_host(norm_host)
         fingerprints["hosts"].append(norm_host)
 
     fingerprints["models"] = module_models
@@ -227,27 +227,14 @@ def load_fingerprints(fp_path):
     host_fingerprints = fingerprints["hosts"]
 
 
-def distance_host(norm_host):
-    dist_host = {
-        "ports": {}
-    }
-
-    if len(norm_host["ports"]) < 1:
-        return None
-
-    for port, port_data in norm_host["ports"].items():
-        model = module_models.get(port_data["type"])
-        if model:
-            dist_port = {}
-            dist_port["type"] = port_data["type"]
-            dist_port["cluster"] = model.predict([port_data["vector"]])[0]
-            trns = model.transform([port_data["vector"]])
-            dist_port["distance"] = min(trns[0])
-            dist_port["port"] = port
-            dist_host["ports"][port] = dist_port
-        else:
-            print("no model for {}".format(port_data["type"]))
-    return dist_host
+def cluster_normalized_host(norm_host):
+    for port, norm_port in norm_host["ports"].items():
+        model = module_models.get(norm_port["type"])
+        if not model:
+            continue
+        norm_port["cluster"] = model.predict([norm_port["vector"]])[0]
+        trns = model.transform([norm_port["vector"]])
+        norm_port["distance"] = min(trns[0])
 
 
 def match_with(host1, host2):
@@ -277,16 +264,22 @@ def match_with(host1, host2):
 
 
 # Match the host against the fingerprints
-def match(host):
+def match(host, force=False):
     norm_host = normalized_host(host)
-    the_host = distance_host(norm_host)
+    cluster_normalized_host(norm_host)
 
-    if not the_host:
+    if not norm_host:
         return False
 
     for fp_host in host_fingerprints:
-        if match_with(fp_host, the_host):
-            print("Match found for host {}: {} ({})".format(host.ip, fp_host["ip"], fp_host["labels"]))
+        # TODO: temp shits?:L/?
+        if fp_host["ip"] == norm_host["ip"] and not force:
+            # ignoring same host
+            print("Refusing to compare host {} with itself. Use the --force, Luke.".format(host.ip))
+            continue
+
+        if match_with(fp_host, norm_host):
+            print("Match found for host {}: {} ({})".format(norm_host["ip"], fp_host["ip"], fp_host["labels"]))
             return True
 
     #print("No match found for host {}".format(host.ip))
