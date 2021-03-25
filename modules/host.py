@@ -43,6 +43,16 @@ class Host():
         return delimiter.join(sorted(label_set))
 
 
+    def get_port_label(self, port, include_unspecified_port=True):
+        # return all labels assosiated with the port
+        # if include_unspecified_port is true, it will include labels that has port number set to None
+        port_labels = []
+        for label in self.labels:
+            if label.port == port or (include_unspecified_port and not label.port):
+                port_labels.append(label)
+        return port_labels
+
+
     def print_data(self):
         print("Host: {} (labels: {}, open ports: {})".format(self.ip, self.label_str(), len(self.ports)))
         if self.geoip:
