@@ -5,7 +5,9 @@ import html_similarity
 import joblib
 from util.label import get_label_names
 
-
+dist_threshold = 0.50
+same_port_num = True
+must_match_tls = True
 fp_hosts = {}
 
 
@@ -65,11 +67,11 @@ diff_keys = {
         { "name": "valid_period", "cmp": _compare_equal, "weight": 1.0 },
 #        { "name": "valid_domains", "cmp": _compare_equal, "weight": 1.0 },
 #        { "name": "valid_ips", "cmp": _compare_equal, "weight": 1.0 },
-#        { "name": "jarm", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "jarm", "cmp": _compare_equal, "weight": 1.0 },
 
     ],
     "unknown": [
-        { "name": "response", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "sha256", "cmp": _compare_equal, "weight": 1.0 },
         { "name": "entropy", "cmp": _compare_entropy, "weight": 1.0 },
     ]
 }
@@ -163,12 +165,17 @@ def match(host):
         candidates = []
         for mod in set(fp_module_map.keys()) & set(host_module_map.keys()):
             distances = [] # list of tuple in format: (distance, fingerprint port, host port)
+            #for fp_port, host_port in itertools.product(fp_module_map[mod], host_module_map[mod]):
             for fp_port, host_port in itertools.product(fp_module_map[mod], host_module_map[mod]):
+                if same_port_num and fp_port.port != host_port.port:
+                    continue
                 # get distance between two ports and add the result to list distances
                 dist = port_diff(mod, fp_port, host_port)
-                # TODO: FIX TLS!!!!!!!!!!!!!!!
-                #if "tls" in fp_port or "tls" in host_port:
-                #    dist = (dist + port_diff("tls", fp_port, host_port)) / 2.0
+                if fp_port.tls or host_port.tls:
+                    if must_match_tls and (fp_port.tls is None or host_port is None):
+                        dist = 1
+                    else:
+                        dist = (dist + port_diff("tls", fp_port, host_port)) / 2.0
                 distances.append((dist, fp_port.port, host_port.port))
 
             c = connect_ports(distances)
@@ -214,7 +221,8 @@ def match(host):
         # get labels
         labels = fp.label_str()
 
-        ip_distances.append((total_dist, ip, labels))
+        if total_dist <= dist_threshold:
+            ip_distances.append((total_dist, ip, labels))
         #print("Distance {} to {} ({})".format(total_dist, ip, labels))
 
     if len(ip_distances) == 0:
@@ -229,7 +237,9 @@ def match(host):
             break
         lbl_dist = c[0]
 
-    print("IP distances (distance: {}-{}, label dist: {}, label: {})".format(ip_distances[0][0],ip_distances[-1][0], lbl_dist, label))
+    closest = ip_distances[0]
+    print("IP distances (distance: {}-{}, label dist: {}, closest label: {}, label match: {})"
+            .format(ip_distances[0][0],ip_distances[-1][0], lbl_dist, closest[2], closest[2] == host.label_str()))
     for c in ip_distances:
         print("Distance {} to {} ({})".format(*c))
 
