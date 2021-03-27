@@ -7,7 +7,7 @@ import argparse
 import methods
 import re
 from util.label import get_label_names
-from scapy.all import PcapReader
+from scapy.all import PcapReader, tcpdump
 import modules.host
 import joblib
 import math
@@ -39,35 +39,40 @@ def populate_statistics(host):
             ip_data["stats"]["tls"] += 1
 
 def pcap_extract(pcap_path, hosts):
-    for p in PcapReader(pcap_path):
-        # we are only interested in syn-ack packet
-        if not "TCP" in p:
-            continue
-        if p["TCP"].flags != "SA":
-            continue
+    with PcapReader(tcpdump(pcap_path, args=["-w", "-", "-n", "tcp"], getfd=True)) as pcreader:
+        for p in pcreader:
+            # we are only interested in syn-ack packet
+            if not "TCP" in p:
+                print("NOT TCP :OOOOO")
+                continue
+            if p["TCP"].flags != "SA":
+                continue
 
-        ip = p["IP"].src
-        if not ip in hosts:
-            continue
+            ip = p["IP"].src
+            if not ip in hosts:
+                continue
 
-        ttl = p.ttl
-        # round up ttl to closest one in the list
-        for t in [32, 64, 128, 255]:
-            if ttl <= t:
-                ttl = t
-                break
+            ttl = p.ttl
+            # round up ttl to closest one in the list
+            for t in [32, 64, 128, 255]:
+                if ttl <= t:
+                    ttl = t
+                    break
 
-        mss = 0
-        for o in p["TCP"].options:
-            if o[0] == "MSS":
-                mss = o[1]
-                break
+            mss = 0
+            for o in p["TCP"].options:
+                if o[0] == "MSS":
+                    mss = o[1]
+                    break
 
-        data_pcap = {}
-        data_pcap["ttl"] = max(data_pcap.get("ttl", 0), ttl)
-        data_pcap["mss"] = max(data_pcap.get("mss", 0), mss)
-        data_pcap["win"] = max(data_pcap.get("win", 0), p["TCP"].window)
-        hosts[ip].pcap = data_pcap
+            if not hosts[ip].tcp:
+                hosts[ip].tcp = {}
+
+            tcp = hosts[ip].tcp
+
+            tcp["ttl"] = max(tcp.get("ttl", 0), ttl)
+            tcp["mss"] = max(tcp.get("mss", 0), mss)
+            tcp["win"] = max(tcp.get("win", 0), p["TCP"].window)
 
 
 def print_progress(done, total):
@@ -330,18 +335,30 @@ def print_statistics(input, detail):
 
 
 def fingerprint(fp_out, data_in, method):
-    data = joblib.load(data_in)
+    data = load_data(data_in)
 
     method = methods.methods.get(method)
     if method:
         method.store_fingerprints(fp_out, data)
 
 
-def print_hosts(data_in, method):
-    hosts = joblib.load(data_in)
+def print_hosts(data_in, method, ip=None):
+    hosts = load_data(data_in)
+
+    # TODO: Support using ip parameter with JARM print.
+
     if method == "data":
-        for host in hosts.values():
+        if ip:
+            host = hosts.get(ip)
+            if not host:
+                print("Error: No host {} exists in data file.".format(ip))
+                sys.exit(1)
+
             host.print_data()
+        else:
+            for host in hosts.values():
+                host.print_data()
+
     elif method == "jarm":
         # count jarm occurence
         jarm_map = {}
@@ -385,18 +402,31 @@ def print_hosts(data_in, method):
                 print("  {}: {}".format(jarm, count))
 
 
-def match(data_in, fp_in, method, force=False):
-    print("Loading data from {} ...".format(data_in))
-    data = joblib.load(data_in)
+def match(data_in, fp_in, method, ip=None, force=False):
+    data = load_data(data_in)
     method = methods.methods[method]
     method.load_fingerprints(fp_in)
     num_matched = 0
     for ip, host in data.items():
         print("Attempting to match host {} ({}) against fingerprinted hosts".format(ip, host.label_str()))
-        if method.match(host, force):
-            num_matched += 1
 
-    print("Number of hosts matched:", num_matched, "of", len(data))
+    if not ip:
+        num_matched = 0
+        for ip, host in data.items():
+            if method.match(host, force):
+                num_matched += 1
+        print("Number of hosts matched:", num_matched, "of", len(data))
+    else:
+        host = data.get(ip)
+
+        if not host:
+            print("Error: No host {} exists in data file.".format(ip))
+            sys.exit(1)
+
+
+def load_data(data_path):
+    print("Loading data from {} ...".format(data_path))
+    return joblib.load(data_path)
 
 
 if __name__ == "__main__":
@@ -412,6 +442,7 @@ if __name__ == "__main__":
     parser_print = subparsers.add_parser("print", help="Print data in the processed host data.")
     parser_print.add_argument("--data-in", help="Extracted Host data.", type=str, required=True)
     parser_print.add_argument("--method", help="Information to print.", type=str, default="data", choices=["data", "jarm"])
+    parser_print.add_argument("--host", help="The optional host to print from the data file.", type=str)
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
     parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, required=True)
@@ -427,16 +458,17 @@ if __name__ == "__main__":
     parser_match.add_argument("--data-in", help="Data file to match with.", type=str, required=True)
     parser_match.add_argument("--method", help="Method to use for matching.", type=str, default="learn", choices=methods.methods.keys())
     parser_match.add_argument("--force", help="Force comparison of two hosts even if they share IP address.", action="store_true", default=False)
+    parser_match.add_argument("--host", help="The specific host IP in the data file to match with.", type=str)
 
     args = parser.parse_args()
 
     if args.subcommand == "extract":
         database_extract(args.data_out, args.db_in, args.labels_in, args.pcap_in)
     elif args.subcommand == "print":
-        print_hosts(args.data_in, args.method)
+        print_hosts(args.data_in, args.method, args.host)
     elif args.subcommand == "stats":
         print_statistics(args.data_in, args.detail)
     elif args.subcommand == "fingerprint":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
-        match(args.data_in, args.fp_in, args.method, args.force)
+        match(args.data_in, args.fp_in, args.method, ip=args.host, force=args.force)

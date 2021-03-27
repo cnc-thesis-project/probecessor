@@ -31,4 +31,3 @@ def entropy(data):
     value, counts = numpy.unique(bytearray(data), return_counts=True)
     norm_counts = counts / counts.sum()
     return -(norm_counts * numpy.log(norm_counts) / numpy.log(2)).sum()
-
