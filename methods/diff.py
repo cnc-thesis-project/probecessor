@@ -137,7 +137,7 @@ def load_fingerprints(fp_path):
 
 
 # Returns the fingerprint match. If none match, return None.
-def match(host):
+def match(host, force=False):
     #print(data)
     #print(host_data)
 
@@ -223,29 +223,22 @@ def match(host):
         # normalize total distance to value betweeon 0.0 - 1.0
         total_dist /= max_dist #* len(set(fp_module_map.keys()) | set(host_module_map.keys()))
 
-        # get labels
-        labels = fp.label_str()
-
         if total_dist <= dist_threshold:
-            ip_distances.append((total_dist, ip, labels))
+            ip_distances.append((total_dist, fp))
         #print("Distance {} to {} ({})".format(total_dist, ip, labels))
 
     if len(ip_distances) == 0:
-        return
+        return []
 
-    ip_distances = sorted(ip_distances)
+    ip_distances = sorted(ip_distances, key=lambda x: x[0])
 
-    label = ip_distances[0][2]
-    lbl_dist = 0
+    _, closest = ip_distances[0]
+    print("IP distances (distance: {}-{}, closest label: {}, label match: {})"
+            .format(ip_distances[0][0],ip_distances[-1][0], closest.label_str(), closest.label_str() == host.label_str()))
+
+    host_labels = host.label_str()
     for c in ip_distances:
-        if label != c[2]:
-            break
-        lbl_dist = c[0]
+        dist, fp_host = c
+        print("Distance from {} ({}) to {} ({}): {}".format(host.ip, host_labels, fp_host.ip, fp_host.label_str(), dist))
 
-    closest = ip_distances[0]
-    print("IP distances (distance: {}-{}, label dist: {}, closest label: {}, label match: {})"
-            .format(ip_distances[0][0],ip_distances[-1][0], lbl_dist, closest[2], closest[2] == host.label_str()))
-    for c in ip_distances:
-        print("Distance from {} to {} ({})".format(*c))
-
-    return
+    return closest.labels

@@ -9,9 +9,11 @@ import re
 from util.label import get_label_names
 from scapy.all import PcapReader, tcpdump
 import modules.host
+from modules.label import Label
 import joblib
 import math
 import time
+from sklearn.metrics import classification_report, confusion_matrix
 
 def populate_statistics(host):
     ip_data["stats"] = {}
@@ -407,20 +409,37 @@ def print_hosts(data_in, method, ip=None):
 
 
 def match(data_in, fp_in, method, ip=None, force=False):
+    start = time.time()
+
     data = load_data(data_in)
     method = methods.methods[method]
     method.load_fingerprints(fp_in)
     num_matched = 0
 
-    for ip, host in data.items():
-        print("Attempting to match host {} ({}) against fingerprinted hosts".format(ip, host.label_str()))
-
     if not ip:
         num_matched = 0
+        y_true = []
+        y_pred = []
+        labels = []
         for ip, host in data.items():
-            if method.match(host, force):
-                num_matched += 1
-        print("Number of hosts matched:", num_matched, "of", len(data))
+            matches = method.match(host, force)
+
+            host_labels = host.label_str()
+            if host_labels not in labels:
+                labels.append(host_labels)
+
+            match_labels = Label.to_str(matches)
+            if match_labels not in labels:
+                labels.append(match_labels)
+
+            y_true.append(labels.index(host_labels))
+            y_pred.append(labels.index(match_labels))
+
+        print(classification_report(y_true, y_pred, target_names=labels, zero_division=0))
+        print("Confusion Matrix")
+        print("Labels:", labels)
+        print(confusion_matrix(y_true, y_pred))
+
     else:
         host = data.get(ip)
 
@@ -428,14 +447,12 @@ def match(data_in, fp_in, method, ip=None, force=False):
             print("Error: No host {} exists in data file.".format(ip))
             sys.exit(1)
 
+    end = time.time()
+    print("Match function took {} seconds to complete".format(end-start))
 
 def load_data(data_path):
     print("Loading data from {} ...".format(data_path))
     return joblib.load(data_path)
-
-    end = time.time()
-    print("Match function took {} seconds to complete".format(end-start))
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
