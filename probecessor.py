@@ -11,6 +11,7 @@ from scapy.all import PcapReader, tcpdump
 import modules.host
 import joblib
 import math
+import time
 
 def populate_statistics(host):
     ip_data["stats"] = {}
@@ -410,6 +411,7 @@ def match(data_in, fp_in, method, ip=None, force=False):
     method = methods.methods[method]
     method.load_fingerprints(fp_in)
     num_matched = 0
+
     for ip, host in data.items():
         print("Attempting to match host {} ({}) against fingerprinted hosts".format(ip, host.label_str()))
 
@@ -430,6 +432,9 @@ def match(data_in, fp_in, method, ip=None, force=False):
 def load_data(data_path):
     print("Loading data from {} ...".format(data_path))
     return joblib.load(data_path)
+
+    end = time.time()
+    print("Match function took {} seconds to complete".format(end-start))
 
 
 if __name__ == "__main__":
