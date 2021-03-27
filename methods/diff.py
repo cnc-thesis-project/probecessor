@@ -13,6 +13,7 @@ fp_hosts = {}
 
 
 def get_module_weight(mod_keys):
+    # TODO: obsolte, no longer used
     return sum(map(lambda x: x["weight"], mod_keys))
 
 def _compare_equal(value1, value2):
@@ -20,7 +21,7 @@ def _compare_equal(value1, value2):
 
 def _compare_entropy(value1, value2):
     # set the distance as entropy diff, but up to 1.0
-n    return min(abs(value1 - value2), 1)
+    return min(abs(value1 - value2), 1)
 
 def _compare_histogram(value1, value2):
     return sum(map(lambda v: abs(v[0] - v[1]), zip(value1, value2))) / 2
@@ -61,7 +62,6 @@ diff_keys = {
 #        { "name": "valid_domains", "cmp": _compare_equal, "weight": 1.0 },
 #        { "name": "valid_ips", "cmp": _compare_equal, "weight": 1.0 },
         { "name": "jarm", "cmp": _compare_equal, "weight": 1.0 },
-
     ],
     "unknown": [
         { "name": "sha256", "cmp": _compare_equal, "weight": 1.0 },
@@ -83,6 +83,7 @@ for request in http_request_types:
 def port_diff(module_name, port1, port2):
     distance = 0
     # TODO: check for silent port
+    max_dist = 0
     for key_meta in diff_keys[module_name]:
         key = key_meta["name"]
         value1 = port1.data.get(key)
@@ -93,12 +94,22 @@ def port_diff(module_name, port1, port2):
         elif value1 is None or value2 is None:
             # either one lacks the key -> not similar!
             key_dist = 1
+            max_dist += 1
         else:
             # both have the key -> compare the values and get distance
             key_dist = key_meta["cmp"](value1, value2)
+            max_dist += 1
         distance += key_dist
+    """if max_dist == 0:
+        print("port: {}".format(module_name))
+        print(port1.data)
+        print(port2.data)
+        print(key_dist)
+        print(max_dist, distance)
+        print(get_module_weight(diff_keys[module_name]))"""
 
-    return distance / get_module_weight(diff_keys[module_name])
+    max_dist = get_module_weight(diff_keys[module_name])
+    return distance / max_dist
 
 def connect_ports(distances):
     fp_ports = set(map(lambda x: x[1], distances))
@@ -166,10 +177,10 @@ def match(host):
                 # get distance between two ports and add the result to list distances
                 dist = port_diff(mod, fp_port, host_port)
                 if fp_port.tls or host_port.tls:
-                    if must_match_tls and (fp_port.tls is None or host_port is None):
+                    if must_match_tls and (fp_port.tls is None or host_port.tls is None):
                         dist = 1
                     else:
-                        dist = (dist + port_diff("tls", fp_port, host_port)) / 2.0
+                        dist = (dist + port_diff("tls", fp_port.tls, host_port.tls)) / 2.0
                 distances.append((dist, fp_port.port, host_port.port))
 
             c = connect_ports(distances)
@@ -235,6 +246,6 @@ def match(host):
     print("IP distances (distance: {}-{}, label dist: {}, closest label: {}, label match: {})"
             .format(ip_distances[0][0],ip_distances[-1][0], lbl_dist, closest[2], closest[2] == host.label_str()))
     for c in ip_distances:
-        print("Distance {} to {} ({})".format(*c))
+        print("Distance from {} to {} ({})".format(*c))
 
     return
