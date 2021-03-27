@@ -337,9 +337,12 @@ def print_statistics(input, detail):
 def fingerprint(fp_out, data_in, method):
     data = load_data(data_in)
 
-    method = methods.methods.get(method)
-    if method:
-        method.store_fingerprints(fp_out, data)
+    method_func = methods.methods.get(method)
+    if method_func:
+        method_func.store_fingerprints(fp_out, data)
+    else:
+        print("Error: method {} not found".format(method))
+        sys.exit(1)
 
 
 def print_hosts(data_in, method, ip=None):
