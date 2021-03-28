@@ -14,6 +14,8 @@ import joblib
 import math
 import time
 from sklearn.metrics import classification_report, confusion_matrix
+import multiprocessing
+import functools
 
 def populate_statistics(host):
     ip_data["stats"] = {}
@@ -421,8 +423,9 @@ def match(data_in, fp_in, method, ip=None, force=False):
         y_true = []
         y_pred = []
         labels = []
-        for ip, host in data.items():
-            matches = method.match(host, force)
+        pool = multiprocessing.Pool(2)
+        for host, matches in pool.imap(functools.partial(method.match, force=force), data.values()):
+            #matches = method.match(host, force)
 
             host_labels = host.label_str()
             if host_labels not in labels:

@@ -6,15 +6,11 @@ import joblib
 from util.label import get_label_names
 import textdistance
 
-dist_threshold = 0.50
+dist_threshold = 0.40
 same_port_num = True
 must_match_tls = True
 fp_hosts = {}
 
-
-def get_module_weight(mod_keys):
-    # TODO: obsolte, no longer used
-    return sum(map(lambda x: x["weight"], mod_keys))
 
 def _compare_equal(value1, value2):
     return 0 if value1 == value2 else 1
@@ -27,9 +23,13 @@ def _compare_histogram(value1, value2):
     return sum(map(lambda v: abs(v[0] - v[1]), zip(value1, value2))) / 2
 
 def _compare_keys(value1, value2):
+    return 0 if value1 == value2 else 1
+    # very very slower with very very few accuracy improvement
     return textdistance.levenshtein.distance(value1, value2) / textdistance.levenshtein.maximum(value1, value2)
 
 def _compare_dom_tree(value1, value2):
+    return 0 if value1 == value2 else 1
+    # very very slower with very very few accuracy improvement
     if value1 == value2:
         return 0
     try:
@@ -37,6 +37,7 @@ def _compare_dom_tree(value1, value2):
     except AttributeError:
         return 1
 
+# note: weight is not implemented
 diff_keys = {
     "http": [
         # populated at runtime using code
@@ -48,6 +49,10 @@ diff_keys = {
         { "name": "ciphers:encryption_algorithms_server_to_client", "cmp": _compare_keys, "weight": 1.0 },
         { "name": "ciphers:mac_algorithms_client_to_server", "cmp": _compare_keys, "weight": 1.0 },
         { "name": "ciphers:mac_algorithms_server_to_client", "cmp": _compare_keys, "weight": 1.0 },
+        { "name": "ciphers:compression_algorithms_client_to_server", "cmp": _compare_keys, "weight": 1.0 },
+        { "name": "ciphers:compression_algorithms_server_to_client", "cmp": _compare_keys, "weight": 1.0 },
+        { "name": "ciphers:languages_client_to_server", "cmp": _compare_keys, "weight": 1.0 },
+        { "name": "ciphers:languages_server_to_client", "cmp": _compare_keys, "weight": 1.0 },
     ],
     "tls": [
         { "name": "subject", "cmp": _compare_equal, "weight": 1.0 },
@@ -59,8 +64,8 @@ diff_keys = {
         { "name": "not_before", "cmp": _compare_equal, "weight": 1.0 },
         { "name": "not_after", "cmp": _compare_equal, "weight": 1.0 },
         { "name": "valid_period", "cmp": _compare_equal, "weight": 1.0 },
-#        { "name": "valid_domains", "cmp": _compare_equal, "weight": 1.0 },
-#        { "name": "valid_ips", "cmp": _compare_equal, "weight": 1.0 },
+        #{ "name": "valid_domains", "cmp": _compare_equal, "weight": 1.0 },
+        #{ "name": "valid_ips", "cmp": _compare_equal, "weight": 1.0 },
         { "name": "jarm", "cmp": _compare_equal, "weight": 1.0 },
     ],
     "unknown": [
@@ -73,10 +78,14 @@ diff_keys = {
 http_request_types = ["get_root", "head_root", "delete_root", "very_simple_get", "not_exist",
                 "invalid_version", "invalid_protocol", "long_path", "get_favicon", "get_robots"]
 for request in http_request_types:
-    diff_keys["http"].append({ "name": "{}:header:Server".format(request), "cmp": _compare_equal, "weight": 1.0 })
-    diff_keys["http"].append({ "name": "{}:header:Content-Type".format(request), "cmp": _compare_equal, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:header:server".format(request), "cmp": _compare_equal, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:header:content-type".format(request), "cmp": _compare_equal, "weight": 1.0 })
     diff_keys["http"].append({ "name": "{}:header_keys".format(request), "cmp": _compare_keys, "weight": 1.0 })
     diff_keys["http"].append({ "name": "{}:status_code".format(request), "cmp": _compare_equal, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:status_text".format(request), "cmp": _compare_equal, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:header:connection".format(request), "cmp": _compare_equal, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:header:transfer-encoding".format(request), "cmp": _compare_equal, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:header:location".format(request), "cmp": _compare_equal, "weight": 1.0 })
     diff_keys["http"].append({ "name": "{}:dom_tree".format(request), "cmp": _compare_dom_tree, "weight": 1.0 })
 
 
@@ -84,12 +93,14 @@ def port_diff(module_name, port1, port2):
     distance = 0
     # TODO: check for silent port
     max_dist = 0
+    port1_data = {k.lower(): v for k, v in port1.data.items()}
+    port2_data = {k.lower(): v for k, v in port2.data.items()}
     for key_meta in diff_keys[module_name]:
         key = key_meta["name"]
-        value1 = port1.data.get(key)
-        value2 = port2.data.get(key)
+        value1 = port1_data.get(key)
+        value2 = port2_data.get(key)
         if value1 is None and value2 is None:
-            # both doesn't have the key -> similar!
+            # both doesn't have the key -> don't count
             key_dist = 0
         elif value1 is None or value2 is None:
             # either one lacks the key -> not similar!
@@ -100,15 +111,9 @@ def port_diff(module_name, port1, port2):
             key_dist = key_meta["cmp"](value1, value2)
             max_dist += 1
         distance += key_dist
-    """if max_dist == 0:
-        print("port: {}".format(module_name))
-        print(port1.data)
-        print(port2.data)
-        print(key_dist)
-        print(max_dist, distance)
-        print(get_module_weight(diff_keys[module_name]))"""
-
-    max_dist = get_module_weight(diff_keys[module_name])
+    if max_dist == 0:
+        # means distance is 0 as well, so doesn't matter what max_dist is as long as it's not 0
+        max_dist = 1
     return distance / max_dist
 
 def connect_ports(distances):
@@ -178,9 +183,15 @@ def match(host, force=False):
                 dist = port_diff(mod, fp_port, host_port)
                 if fp_port.tls or host_port.tls:
                     if must_match_tls and (fp_port.tls is None or host_port.tls is None):
+                        # consider the ports as totally different
                         dist = 1
                     else:
-                        dist = (dist + port_diff("tls", fp_port.tls, host_port.tls)) / 2.0
+                        if fp_port.tls and host_port.tls:
+                            # both has tls, diff
+                            dist = (dist + port_diff("tls", fp_port.tls, host_port.tls)) / 2.0
+                        else:
+                            # either one doesn't have tls, so tls part differs
+                            dist = (dist + 1.0) / 2.0
                 distances.append((dist, fp_port.port, host_port.port))
 
             c = connect_ports(distances)
@@ -225,10 +236,9 @@ def match(host, force=False):
 
         if total_dist <= dist_threshold:
             ip_distances.append((total_dist, fp))
-        #print("Distance {} to {} ({})".format(total_dist, ip, labels))
 
     if len(ip_distances) == 0:
-        return []
+        return (host, [])
 
     ip_distances = sorted(ip_distances, key=lambda x: x[0])
 
@@ -241,4 +251,4 @@ def match(host, force=False):
         dist, fp_host = c
         print("Distance from {} ({}) to {} ({}): {}".format(host.ip, host_labels, fp_host.ip, fp_host.label_str(), dist))
 
-    return closest.labels
+    return (host, closest.labels)
