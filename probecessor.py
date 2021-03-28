@@ -435,7 +435,7 @@ def match(data_in, fp_in, method, ip=None, force=False):
             y_true.append(labels.index(host_labels))
             y_pred.append(labels.index(match_labels))
 
-        print(classification_report(y_true, y_pred, target_names=labels, zero_division=0))
+        print(classification_report(y_true, y_pred, target_names=labels, zero_division=0, digits=4))
         print("Confusion Matrix")
         print("Labels:", labels)
         print(confusion_matrix(y_true, y_pred))
