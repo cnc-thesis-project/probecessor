@@ -167,7 +167,7 @@ def extract_vector(port):
 # a dictionary containing the port feature vectors.
 def normalized_host(host):
     norm = {"ports":{}}
-    norm["labels"] = host.label_str()
+    norm["labels"] = host.labels
     norm["ip"] = host.ip
     for port in host.ports.values():
         port_num = port.port
@@ -269,18 +269,16 @@ def match(host, force=False):
     cluster_normalized_host(norm_host)
 
     if not norm_host:
-        return False
+        return (host,[])
 
     for fp_host in host_fingerprints:
-        # TODO: temp shits?:L/?
         if fp_host["ip"] == norm_host["ip"] and not force:
             # ignoring same host
             print("Refusing to compare host {} with itself. Use the --force, Luke.".format(host.ip))
             continue
 
         if match_with(fp_host, norm_host):
-            print("Match found for host {}: {} ({})".format(norm_host["ip"], fp_host["ip"], fp_host["labels"]))
-            return True
+            return (host, fp_host["labels"])
 
     #print("No match found for host {}".format(host.ip))
-    return False
+    return (host, [])
