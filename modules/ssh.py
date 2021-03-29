@@ -124,20 +124,3 @@ def parse_key(data):
         payload = payload[chunk_size+4:]
 
     return keys
-
-def run(rows):
-    data = {}
-    for row in rows:
-        # TODO: more proper error handling
-        try:
-            if row["type"] == "string":
-                data["server"] = parse_string(row["data"])
-            elif row["type"] == "ciphers":
-                algorithms = parse_algo_negotiation(row["data"])
-                for key in algorithms:
-                    data["ciphers:{}".format(key)] = algorithms[key]
-            elif row["type"] == "keys":
-                data["keys"] = parse_key(row["data"])
-        except:
-            pass
-    return data
