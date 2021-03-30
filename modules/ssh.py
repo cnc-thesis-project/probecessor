@@ -18,15 +18,20 @@ class SshPort(modules.port.Port):
 
 
     def add_data(self, row):
-        # TODO: more proper error handling
-        if row["type"] == "string":
-            self.data["server"] = parse_string(row["data"])
-        elif row["type"] == "ciphers":
-            algorithms = parse_algo_negotiation(row["data"])
-            for key in algorithms:
-                self.data["ciphers:{}".format(key)] = algorithms[key]
-        elif row["type"] in ["ssh-rsa", "ssh-ecdsa", "ssh-ed25519"]:
-            self.data.update(parse_key(row["data"]))
+        try:
+            # TODO: more proper error handling
+            if row["type"] == "string":
+                self.data["server"] = parse_string(row["data"])
+            elif row["type"] == "ciphers":
+                algorithms = parse_algo_negotiation(row["data"])
+                for key in algorithms:
+                    self.data["ciphers:{}".format(key)] = algorithms[key]
+            elif row["type"] in ["ssh-rsa", "ssh-ecdsa", "ssh-ed25519"]:
+                self.data.update(parse_key(row["data"]))
+        except Exception:
+            import traceback
+            print(traceback.format_exc())
+            pass
 
 
     def get_property(self, name):
