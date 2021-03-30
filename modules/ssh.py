@@ -19,17 +19,14 @@ class SshPort(modules.port.Port):
 
     def add_data(self, row):
         # TODO: more proper error handling
-        try:
-            if row["type"] == "string":
-                self.data["server"] = parse_string(row["data"])
-            elif row["type"] == "ciphers":
-                algorithms = parse_algo_negotiation(row["data"])
-                for key in algorithms:
-                    self.data["ciphers:{}".format(key)] = algorithms[key]
-            elif row["type"] == "keys":
-                self.data["keys"] = parse_key(row["data"])
-        except:
-            pass
+        if row["type"] == "string":
+            self.data["server"] = parse_string(row["data"])
+        elif row["type"] == "ciphers":
+            algorithms = parse_algo_negotiation(row["data"])
+            for key in algorithms:
+                self.data["ciphers:{}".format(key)] = algorithms[key]
+        elif row["type"] in ["ssh-rsa", "ssh-ecdsa", "ssh-ed25519"]:
+            self.data.update(parse_key(row["data"]))
 
 
     def get_property(self, name):
@@ -94,33 +91,12 @@ def parse_algo_negotiation(data):
     return algo_lists_map
 
 def parse_key(data):
-    packet_len = struct.unpack(">i", data[0:4])[0]
-    padding_len = data[4]
-    payload = data[5:5+packet_len-padding_len-1]
-    ssh_msg = payload[0]
+    key = {}
 
-    payload = payload[1:]
+    ssh_key = SSHKey(data.decode())
+    if ssh_key.bits is not None:
+        name = ssh_key.key_type.decode()
+        key[name + ":size"] = ssh_key.bits
+        key[name + ":sha256"] = ssh_key.hash_sha256()
 
-    #print("Payload")
-    #print(payload, len(payload))
-    #print(ssh_msg)
-
-    keys = {}
-
-    while len(payload) > 0:
-        chunk_size = struct.unpack(">i", payload[0:4])[0]
-        data = payload[4:chunk_size+4]
-
-        name_len = struct.unpack(">i", data[:4])[0]
-        name = data[4:4+name_len]
-
-        if all(0 < c < 128 for c in name) and name_len < chunk_size:
-            name = name.decode()
-            key = SSHKey("{} {}".format(name, b64encode(data).decode()))
-            #print("{} {}".format(name, b64encode(data).decode()))
-            if key.bits is not None:
-                keys[key.key_type.decode()] = {"size": key.bits, "sha256": key.hash_sha256()}
-
-        payload = payload[chunk_size+4:]
-
-    return keys
+    return key
