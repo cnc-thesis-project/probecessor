@@ -20,8 +20,8 @@ class TlsPort(modules.module.Module):
             openssl_cert = crypto.load_certificate(crypto.FILETYPE_ASN1, cert_der)
             subject = openssl_cert.get_subject().get_components()
             issuer = openssl_cert.get_issuer().get_components()
-            self.data["subject"] = "".join("/{0:s}={1:s}".format(name.decode("latin-1"), value.decode("latin-1")) for name, value in subject)
-            self.data["issuer"] = "".join("/{0:s}={1:s}".format(name.decode("latin-1"), value.decode("latin-1")) for name, value in issuer)
+            self.data["subject"] = b"".join(name + b"=" + value for name, value in subject)
+            self.data["issuer"] = b"".join(name + b"=" + value for name, value in issuer)
             self.data["sign_alg"] = cert.signature_algorithm_oid._name
             self.data["hash_alg"] = cert.signature_hash_algorithm.name
             self.data["key_size"] = cert.public_key().key_size
@@ -54,7 +54,7 @@ class TlsPort(modules.module.Module):
             self.data["not_before"] = int(cert.not_valid_before.replace(tzinfo=timezone.utc).timestamp())
             self.data["not_after"] = int(cert.not_valid_after.replace(tzinfo=timezone.utc).timestamp())
             self.data["valid_period"] = self.data["not_after"] - self.data["not_before"]
-            self.data["is_valid"] = self.data["not_before"] <= datetime.utcnow().replace(tzinfo=timezone.utc).timestamp() <= self.data["not_after"]
+            self.data["is_valid"] = self.data["not_before"] <= row["probe_time"] <= self.data["not_after"]
             #print("Common name:", cn)
             #print("Date issued:", cert.not_valid_before)
         elif row["type"] == "jarm":
