@@ -3,6 +3,7 @@ from datetime import datetime
 from datetime import timezone
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
+from OpenSSL import crypto
 import modules.module
 
 
@@ -15,20 +16,24 @@ class TlsPort(modules.module.Module):
         if row["type"] == "certificate":
             cert_der = row["data"]
             cert = x509.load_der_x509_certificate(cert_der)
-            #print("Issuer:", cert.issuer.human_friendly)
-            self.data["subject"] = cert.subject.rfc4514_string()
-            self.data["issuer"] = cert.issuer.rfc4514_string()
+            # use openssl to parse subject/issuer since cryptography lib may throw unavoidable exceptions
+            openssl_cert = crypto.load_certificate(crypto.FILETYPE_ASN1, cert_der)
+            subject = openssl_cert.get_subject().get_components()
+            issuer = openssl_cert.get_issuer().get_components()
+            self.data["subject"] = "".join("/{0:s}={1:s}".format(name.decode("latin-1"), value.decode("latin-1")) for name, value in subject)
+            self.data["issuer"] = "".join("/{0:s}={1:s}".format(name.decode("latin-1"), value.decode("latin-1")) for name, value in issuer)
             self.data["sign_alg"] = cert.signature_algorithm_oid._name
             self.data["hash_alg"] = cert.signature_hash_algorithm.name
             self.data["key_size"] = cert.public_key().key_size
             self.data["key_sha256"] = cert.fingerprint(hashes.SHA256()).hex()
-            #self.data["issued"] = 1; print(dir(cert))
-            self.data["self_issued"] = cert.subject == cert.issuer
+            self.data["self_issued"] = self.data["subject"] == self.data["issuer"]
             try:
                 authority_key_identifier = cert.extensions.get_extension_for_oid(x509.oid.ExtensionOID.AUTHORITY_KEY_IDENTIFIER).value
                 if authority_key_identifier:
                     authority_key_identifier = authority_key_identifier.key_identifier
                 key_identifier = cert.extensions.get_extension_for_oid(x509.oid.ExtensionOID.SUBJECT_KEY_IDENTIFIER).value
+                if key_identifier:
+                    key_identifier = key_identifier.digest
                 self_signed = "no"
                 if self.data["self_issued"]:
                     if key_identifier:
