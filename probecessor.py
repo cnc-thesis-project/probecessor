@@ -454,8 +454,11 @@ def match(data_in, fp_in, method, ip=None, force=False):
     print("Match function took {} seconds to complete".format(end-start))
 
 def load_data(data_path):
-    print("Loading data from {} ...".format(data_path))
-    return joblib.load(data_path)
+    data = {}
+    for path in data_path:
+        print("Loading data from {} ...".format(path))
+        data.update(joblib.load(path))
+    return data
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The probeably data probecessor.")
@@ -468,12 +471,12 @@ if __name__ == "__main__":
     parser_extract.add_argument("--data-out", help="Output file holding the processed host data.", type=str, required=True)
     # sub-command print
     parser_print = subparsers.add_parser("print", help="Print data in the processed host data.")
-    parser_print.add_argument("--data-in", help="Extracted Host data.", type=str, required=True)
+    parser_print.add_argument("--data-in", help="Extracted Host data.", type=str, nargs="+", required=True)
     parser_print.add_argument("--method", help="Information to print.", type=str, default="data", choices=["data", "jarm"])
     parser_print.add_argument("--host", help="The optional host to print from the data file.", type=str)
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
-    parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, required=True)
+    parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, nargs="+", required=True)
     parser_fingerprint.add_argument("--fp-out", help="Output file for storing the fingerprints.", type=str, required=True)
     parser_fingerprint.add_argument("--method", help="Method to use for .", type=str, default="learn", choices=["learn"])
     # sub-command stats
@@ -483,7 +486,7 @@ if __name__ == "__main__":
     # sub-command match
     parser_match = subparsers.add_parser("match", help="Match a host to fingerprinted hosts.")
     parser_match.add_argument("--fp-in", help="Fingerprints to use for matching.", type=str, required=True)
-    parser_match.add_argument("--data-in", help="Data file to match with.", type=str, required=True)
+    parser_match.add_argument("--data-in", help="Data file to match with.", type=str, nargs="+", required=True)
     parser_match.add_argument("--method", help="Method to use for matching.", type=str, default="learn", choices=methods.methods.keys())
     parser_match.add_argument("--force", help="Force comparison of two hosts even if they share IP address.", action="store_true", default=False)
     parser_match.add_argument("--host", help="The specific host IP in the data file to match with.", type=str)
