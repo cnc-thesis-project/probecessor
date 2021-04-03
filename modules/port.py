@@ -10,6 +10,7 @@ class Port(modules.module.Module):
         self.type = port_type
         self.port = port_num
 
+
     def print_data(self, indent=0):
         print("{}Port: {} ({})".format(" " * indent, self.port, self.type))
         if self.tls:

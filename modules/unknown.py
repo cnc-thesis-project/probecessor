@@ -4,8 +4,8 @@ import modules.port
 import hashlib
 
 class UnknownPort(modules.port.Port):
-    def __init__(self, port):
-        super().__init__("unknown", port)
+    def __init__(self, port, name="unknown"):
+        super().__init__(name, port)
         self.data = {}
 
 

@@ -1,4 +1,4 @@
-import methods.learn
+import methods.cluster.cluster
 import methods.rules
 import methods.diff
 import methods.aggregate
@@ -9,7 +9,7 @@ import methods.ssh_key
 
 
 methods = {
-    "learn": methods.learn,
+    "cluster": methods.cluster.cluster,
     "rules": methods.rules,
     "diff": methods.diff,
     "aggregate": methods.aggregate,

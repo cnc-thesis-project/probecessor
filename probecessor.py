@@ -478,7 +478,7 @@ if __name__ == "__main__":
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
     parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, nargs="+", required=True)
     parser_fingerprint.add_argument("--fp-out", help="Output file for storing the fingerprints.", type=str, required=True)
-    parser_fingerprint.add_argument("--method", help="Method to use for .", type=str, default="learn", choices=["learn"])
+    parser_fingerprint.add_argument("--method", help="Method to use for .", type=str, default="cluster", choices=["cluster"])
     # sub-command stats
     parser_stats = subparsers.add_parser("stats", help="Print statistics from host data.")
     parser_stats.add_argument("--data-in", help="Data file to print statistics from.", type=str, required=True)
@@ -487,7 +487,7 @@ if __name__ == "__main__":
     parser_match = subparsers.add_parser("match", help="Match a host to fingerprinted hosts.")
     parser_match.add_argument("--fp-in", help="Fingerprints to use for matching.", type=str, required=True)
     parser_match.add_argument("--data-in", help="Data file to match with.", type=str, nargs="+", required=True)
-    parser_match.add_argument("--method", help="Method to use for matching.", type=str, default="learn", choices=methods.methods.keys())
+    parser_match.add_argument("--method", help="Method to use for matching.", type=str, default="cluster", choices=methods.methods.keys())
     parser_match.add_argument("--force", help="Force comparison of two hosts even if they share IP address.", action="store_true", default=False)
     parser_match.add_argument("--host", help="The specific host IP in the data file to match with.", type=str)
 
