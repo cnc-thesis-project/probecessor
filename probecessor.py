@@ -18,32 +18,6 @@ from sklearn.metrics import classification_report, confusion_matrix
 import multiprocessing
 import functools
 
-def populate_statistics(host):
-    ip_data["stats"] = {}
-    # nr of no response at all from server port
-    ip_data["stats"]["no_response"] = 0
-    # nr of (un)identifiable port service
-    # note: port with no response is not counted in unknown
-    ip_data["stats"]["known"] = 0
-    ip_data["stats"]["unknown"] = 0
-    # nr of open ports
-    ip_data["stats"]["open_ports"] = len(ip_data["port"])
-    # nr of ports with tls
-    ip_data["stats"]["tls"] = 0
-    # TODO: uses the expected port for the service
-    expected_port = 0
-
-    for port in ip_data["port"]:
-        if "unknown" in ip_data["port"][port] and len(ip_data["port"][port]["unknown"]["response"]) == 0:
-            ip_data["stats"]["no_response"] += 1
-        elif ip_data["port"][port]["name"] == "unknown":
-            ip_data["stats"]["unknown"] += 1
-        else:
-            ip_data["stats"]["known"] += 1
-
-        if ip_data["port"][port].get("tls", False):
-            ip_data["stats"]["tls"] += 1
-
 def pcap_extract(pcap_path, hosts):
     with PcapReader(tcpdump(pcap_path, args=["-w", "-", "-n", "tcp"], getfd=True)) as pcreader:
         for p in pcreader:
@@ -181,10 +155,6 @@ def database_extract(output, database, label_path, pcap_path):
             remove_ip.append(ip)
             continue"""
 
-        # TODO:
-        # data[ip].get_statistics()
-        #populate_statistics(data[ip])
-
     for ip in remove_ip:
         del host_map[ip]
     print("Filtered {} hosts".format(len(remove_ip)))
@@ -238,98 +208,6 @@ def database_extract(output, database, label_path, pcap_path):
     joblib.dump(host_map, output)
 
     dbh.close()
-
-def stringify_dict_keys(d, prefix="", separator="/", start_regex=re.compile("")):
-    keys = set()
-
-    for k in d:
-        new_prefix = prefix + separator + k
-        if isinstance(d[k], dict):
-            keys.update(stringify_dict_keys(d[k], new_prefix, separator, start_regex))
-        else:
-            match = start_regex.match(new_prefix)
-            if match is None:
-                continue
-            keys.add(new_prefix[match.span()[1]:])
-
-    return keys
-
-def print_statistics(input, detail):
-    with open(input, "r") as f:
-        data = json.load(f)
-
-    # things to print: average port stats, % of hosts having "..." module, rdns, key stat
-    ip_len = len(data)
-    print("Hosts: {}".format(ip_len))
-    for key in data[list(data.keys())[0]]["stats"]:
-        value_sum = sum(map(lambda ip: data[ip]["stats"][key], data))
-        print("{}: {}, average per host: {}".format(key, value_sum, (value_sum/ip_len)))
-
-    port_stat = [{"port": i, "count": 0} for i in range(65536)]
-    for ip in data:
-        for port in data[ip]["port"]:
-            port_stat[int(port)]["count"] += 1
-
-    print("\nPort statistics - Top ~20")
-    port_stat = sorted(port_stat, key=lambda k: k["count"], reverse=True)
-    for p in port_stat[:20]:
-        if p["count"] == 0:
-            break
-
-        print("Port {}: {} hosts".format(p["port"], p["count"]))
-
-    if detail == "none":
-        return
-
-    module_keys = stringify_dict_keys(data, start_regex=re.compile("^/[0-9.]*/port/[0-9]*/"))
-    data_stats = {}
-    for keys in module_keys:
-        data_stats[keys] = {"ports": 0, "hosts": 0, "value": {}}
-        for ip in data:
-            key_hosts = set()
-            value_hosts = set()
-            for port in data[ip]["port"]:
-                # aggregate key
-                d = data[ip]["port"][port]
-                for k in keys.split("/"):
-                    d = d.get(k)
-                    if not d:
-                        break
-                if not d:
-                    continue
-                data_stats[keys]["ports"] += 1
-                if not keys in key_hosts:
-                    key_hosts.add(keys)
-                    data_stats[keys]["hosts"] += 1
-
-                if detail != "values":
-                    continue
-                # aggregate values
-                values = [d]
-                if isinstance(d, list):
-                    values = d
-                for value in values:
-                    if not value in data_stats[keys]["value"]:
-                        data_stats[keys]["value"][value] = {"ports": 0, "hosts": 0}
-                    data_stats[keys]["value"][value]["ports"] += 1
-                    if not (keys + "/" + str(value)) in value_hosts:
-                        value_hosts.add(keys + "/" + str(value))
-                        data_stats[keys]["value"][value]["hosts"] += 1
-
-    for key in data_stats:
-        key_stats = data_stats[key]
-        print("Key: {}".format(key))
-        print(" - Ports: {}, Hosts: {}".format(key_stats["ports"], key_stats["hosts"]))
-
-        if detail != "values":
-            continue
-        for value in key_stats["value"]:
-            value_stats = key_stats["value"][value]
-            print("    - Value: {}".format(value))
-            print("       - Ports: {}, Hosts: {}".format(value_stats["ports"], value_stats["hosts"]))
-
-    return
-
 
 def fingerprint(fp_out, data_in, method):
     data = load_data(data_in)
@@ -471,15 +349,15 @@ if __name__ == "__main__":
     parser_print.add_argument("--data-in", help="Extracted Host data.", type=str, nargs="+", required=True)
     parser_print.add_argument("--method", help="Information to print.", type=str, default="data", choices=["data", "jarm"])
     parser_print.add_argument("--host", help="The optional host to print from the data file.", type=str)
+    # sub-command split
+    parser_split = subparsers.add_parser("split", help="Print statistics from host data.")
+    parser_split.add_argument("--data-in", help="Data file to print statistics from.", type=str, required=True)
+    parser_split.add_argument("--detail", help="Aggregate keys.", choices=["none", "keys", "values"], default="none")
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
     parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, nargs="+", required=True)
     parser_fingerprint.add_argument("--fp-out", help="Output file for storing the fingerprints.", type=str, required=True)
     parser_fingerprint.add_argument("--method", help="Method to use for .", type=str, default="cluster", choices=["cluster"])
-    # sub-command stats
-    parser_stats = subparsers.add_parser("stats", help="Print statistics from host data.")
-    parser_stats.add_argument("--data-in", help="Data file to print statistics from.", type=str, required=True)
-    parser_stats.add_argument("--detail", help="Aggregate keys.", choices=["none", "keys", "values"], default="none")
     # sub-command match
     parser_match = subparsers.add_parser("match", help="Match a host to fingerprinted hosts.")
     parser_match.add_argument("--fp-in", help="Fingerprints to use for matching.", type=str, required=True)
@@ -494,7 +372,7 @@ if __name__ == "__main__":
         database_extract(args.data_out, args.db_in, args.labels_in, args.pcap_in)
     elif args.subcommand == "print":
         print_hosts(args.data_in, args.method, args.host)
-    elif args.subcommand == "stats":
+    elif args.subcommand == "split":
         print_statistics(args.data_in, args.detail)
     elif args.subcommand == "fingerprint":
         fingerprint(args.fp_out, args.data_in, args.method)
