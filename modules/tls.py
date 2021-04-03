@@ -43,6 +43,7 @@ class TlsPort(modules.module.Module):
                         self_signed = "maybe"
                 self.data["self_signed"] = self_signed
             except x509.extensions.ExtensionNotFound:
+                self.data["self_signed"] = "no"
                 pass
             #print(cert.is_valid_domain_ip())
             try:
