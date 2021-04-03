@@ -5,6 +5,7 @@ import methods.aggregate
 import methods.jarm
 import methods.cert
 import methods.self_signed
+import methods.ssh_key
 
 
 methods = {
@@ -15,4 +16,5 @@ methods = {
     "jarm": methods.jarm,
     "cert": methods.cert,
     "self-signed": methods.self_signed,
+    "ssh-key": methods.ssh_key,
 }
