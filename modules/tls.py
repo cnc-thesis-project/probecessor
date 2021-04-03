@@ -20,8 +20,8 @@ class TlsPort(modules.module.Module):
             openssl_cert = crypto.load_certificate(crypto.FILETYPE_ASN1, cert_der)
             subject = openssl_cert.get_subject().get_components()
             issuer = openssl_cert.get_issuer().get_components()
-            self.data["subject"] = b"".join(name + b"=" + value for name, value in subject)
-            self.data["issuer"] = b"".join(name + b"=" + value for name, value in issuer)
+            self.data["subject"] = b"".join(b"/" + name + b"=" + value for name, value in subject)
+            self.data["issuer"] = b"".join(b"/" + name + b"=" + value for name, value in issuer)
             self.data["sign_alg"] = cert.signature_algorithm_oid._name
             self.data["hash_alg"] = cert.signature_hash_algorithm.name
             self.data["key_size"] = cert.public_key().key_size
@@ -48,7 +48,7 @@ class TlsPort(modules.module.Module):
             try:
                 alternative = cert.extensions.get_extension_for_oid(x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
                 self.data["valid_domains"] = alternative.value.get_values_for_type(x509.DNSName)
-                self.data["valid_ips"] = alternative.value.get_values_for_type(x509.IPAddress)
+                self.data["valid_ips"] = list(map(str, alternative.value.get_values_for_type(x509.IPAddress)))
             except x509.extensions.ExtensionNotFound:
                 pass
             self.data["not_before"] = int(cert.not_valid_before.replace(tzinfo=timezone.utc).timestamp())
