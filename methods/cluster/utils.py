@@ -1,10 +1,17 @@
+import methods.cluster.models
+
+
 def cluster_module_data(mod_data):
-    model = module_models.get(mod_data["type"])
-    if not model:
+    if not mod_data.get("vector"):
+        print("WARNING: NO VECTOR FOR {}".format(mod_data["module"]))
         return
-    norm_port["cluster"] = model.predict([norm_port["vector"]])[0]
-    trns = model.transform([norm_port["vector"]])
-    norm_port["distance"] = min(trns[0])
+    model = methods.cluster.models.models.get(mod_data["module"])
+    if not model:
+        print("WARNING: NO MODEL FOR {}".format(mod_data["type"]))
+        return
+    mod_data["cluster"] = model.predict([mod_data["vector"]])[0]
+    #trns = model.transform([mod_data["vector"]])
+    #mod_data["distance"] = min(trns[0])
 
 
 def match_module_clusters(mod_data1, mod_data2):
@@ -13,8 +20,10 @@ def match_module_clusters(mod_data1, mod_data2):
 
     if not cluster1:
         cluster1 = cluster_module_data(mod_data1)
+        mod_data1["cluster"] = cluster1
     if not cluster2:
         cluster2 = cluster_module_data(mod_data2)
+        mod_data2["cluster"] = cluster2
 
     if cluster1 == cluster2:
         return True

@@ -34,7 +34,7 @@ _compression_algorithms = [
 ]
 
 _props_to_vectorizers = {
-    "kex_algorithms": ListOrderVectorizer([
+    "ciphers:kex_algorithms": ListOrderVectorizer([
         "curve25519-sha256",
         "curve25519-sha256@libssh.org",
         "ecdh-sha2-nistp256",
@@ -46,19 +46,19 @@ _props_to_vectorizers = {
         "diffie-hellman-group14-sha256",
         "diffie-hellman-group14-sha1",
     ]),
-    "server_host_key_algorithms": ListOrderVectorizer([
+    "ciphers:server_host_key_algorithms": ListOrderVectorizer([
         "rsa-sha2-512",
         "rsa-sha2-256",
         "ssh-rsa",
         "ecdsa-sha2-nistp256",
         "ssh-ed25519",
     ]),
-    "encryption_algorithms_client_to_server": ListOrderVectorizer(_encryption_algorithms),
-    "encryption_algorithms_server_to_client": ListOrderVectorizer(_encryption_algorithms),
-    "mac_algorithms_client_to_server": ListOrderVectorizer(_mac_algorithms),
-    "mac_algorithms_server_to_client": ListOrderVectorizer(_mac_algorithms),
-    "compression_algorithms_client_to_server": ListOrderVectorizer(_compression_algorithms),
-    "compression_algorithms_server_to_client": ListOrderVectorizer(_compression_algorithms),
+    "ciphers:encryption_algorithms_client_to_server": ListOrderVectorizer(_encryption_algorithms),
+    "ciphers:encryption_algorithms_server_to_client": ListOrderVectorizer(_encryption_algorithms),
+    "ciphers:mac_algorithms_client_to_server": ListOrderVectorizer(_mac_algorithms),
+    "ciphers:mac_algorithms_server_to_client": ListOrderVectorizer(_mac_algorithms),
+    "ciphers:compression_algorithms_client_to_server": ListOrderVectorizer(_compression_algorithms),
+    "ciphers:compression_algorithms_server_to_client": ListOrderVectorizer(_compression_algorithms),
 }
 
 

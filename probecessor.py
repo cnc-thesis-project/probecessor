@@ -7,6 +7,7 @@ import argparse
 import methods
 import re
 from util.label import get_label_names
+from util.progress import print_progress
 from scapy.all import PcapReader, tcpdump
 import modules.host
 from modules.label import Label
@@ -78,14 +79,6 @@ def pcap_extract(pcap_path, hosts):
             tcp["ttl"] = max(tcp.get("ttl", 0), ttl)
             tcp["mss"] = max(tcp.get("mss", 0), mss)
             tcp["win"] = max(tcp.get("win", 0), p["TCP"].window)
-
-
-def print_progress(done, total):
-    print("\r", end="")
-
-    prog = (done/total)*10
-    print("[" + int(prog)*"=" + math.ceil(10-prog)*"-" + "] {0:.2f}% ({1}/{2})".format(prog*10, done, total), end="")
-    sys.stdout.flush()
 
 
 def database_extract(output, database, label_path, pcap_path):
@@ -424,7 +417,11 @@ def match(data_in, fp_in, method, ip=None, force=False):
         y_pred = []
         labels = []
         pool = multiprocessing.Pool(2)
+        print_progress(0, len(data))
+        count = 0
         for host, matches in pool.imap(functools.partial(method.match, force=force), data.values()):
+            count += 1
+            print_progress(count, len(data))
             #matches = method.match(host, force)
 
             host_labels = host.label_str()
@@ -438,6 +435,7 @@ def match(data_in, fp_in, method, ip=None, force=False):
             y_true.append(labels.index(host_labels))
             y_pred.append(labels.index(match_labels))
 
+        print("")
         print(classification_report(y_true, y_pred, target_names=labels, zero_division=0, digits=4))
         print("Confusion Matrix")
         print("Labels:", labels)
