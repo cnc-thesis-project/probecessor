@@ -117,14 +117,13 @@ def database_extract(output, database, label_path, pcap_path):
             if not host_map.get(ip):
                 host_map[ip] = modules.host.Host(ip)
             module_name = row["name"]
-
             port = row["port"]
-            mod_class = modules.modules.get(module_name)
-            if not mod_class:
-                continue
+
             if port == 0:
+                mod_obj = modules.get_module(module_name)
+                if not mod_obj:
+                    continue
                 # ip module stuff
-                mod_obj = mod_class()
                 mod_obj.add_data(row)
 
                 if mod_obj.name == "geoip":
@@ -136,12 +135,12 @@ def database_extract(output, database, label_path, pcap_path):
                 if module_name == "tls":
                     port_obj = tls_map.get("{}:{}".format(ip, port))
                     if not port_obj:
-                        port_obj = mod_class()
+                        port_obj = modules.get_port("tls")
                         tls_map["{}:{}".format(ip, port)] = port_obj
                 else:
                     port_obj = host_map[ip].ports.get(port)
                     if not port_obj:
-                        port_obj = mod_class(port)
+                        port_obj = modules.get_port(module_name, port)
                         host_map[ip].insert_port(port_obj)
 
                 try:
@@ -161,7 +160,7 @@ def database_extract(output, database, label_path, pcap_path):
         port = int(port)
         port_obj = host_map[ip].ports.get(port)
         if not port_obj:
-            port_obj = modules.modules.get("unknown")(port)
+            port_obj = modules.get_port("generic", port)
             host_map[ip].insert_port(port_obj)
         port_obj.tls = tls
 
