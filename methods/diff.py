@@ -74,12 +74,15 @@ diff_keys = {
         #{ "name": "valid_ips", "cmp": _compare_equal, "weight": 1.0 },
         { "name": "jarm", "cmp": _compare_equal, "weight": 1.0 },
     ],
-    "unknown": [
-        { "name": "sha256", "cmp": _compare_equal, "weight": 1.0 },
-        { "name": "entropy", "cmp": _compare_entropy, "weight": 1.0 },
-        { "name": "histogram", "cmp": _compare_histogram, "weight": 1.0 },
-    ]
 }
+
+for generic in ["unknown", "smtp", "pop3", "ftp", "imap"]:
+    diff_keys[generic] = \
+        [
+            { "name": "sha256", "cmp": _compare_equal, "weight": 1.0 },
+            { "name": "entropy", "cmp": _compare_entropy, "weight": 1.0 },
+            { "name": "histogram", "cmp": _compare_histogram, "weight": 1.0 },
+        ]
 
 http_request_types = ["get_root", "head_root", "delete_root", "very_simple_get", "not_exist",
                 "invalid_version", "invalid_protocol", "long_path", "get_favicon", "get_robots"]
@@ -99,8 +102,8 @@ def port_diff(module_name, port1, port2):
     distance = 0
     # TODO: check for silent port
     max_dist = 0
-    port1_data = {k.lower(): v for k, v in port1.data.items()}
-    port2_data = {k.lower(): v for k, v in port2.data.items()}
+    port1_data = {k.lower(): v for k, v in port1.get_properties()}
+    port2_data = {k.lower(): v for k, v in port2.get_properties()}
     for key_meta in diff_keys[module_name]:
         key = key_meta["name"]
         value1 = port1_data.get(key)
@@ -154,9 +157,9 @@ def match(host, force=False):
 
     host_module_map = {} # module type -> list of Port classes
     for port in host.ports.values():
-        if len(port.data) == 0:
-            # silent port
-            continue
+        #if len(port.data) == 0:
+        #    # silent port
+        #    continue
         if not port.type in host_module_map:
             host_module_map[port.type] = []
         host_module_map[port.type].append(port)
@@ -168,9 +171,9 @@ def match(host, force=False):
             continue
         fp_module_map = {} # module type -> list of Port classes
         for port in fp.ports.values():
-            if len(port.data) == 0:
-                # silent port
-                continue
+            #if len(port.data) == 0:
+            #    # silent port
+            #    continue
             if not port.type in fp_module_map:
                 fp_module_map[port.type] = []
             fp_module_map[port.type].append(port)

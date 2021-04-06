@@ -7,6 +7,7 @@ import argparse
 import methods
 import re
 from util.label import get_label_names
+from util.progress import print_progress
 from scapy.all import PcapReader, tcpdump
 import modules.host
 from modules.label import Label
@@ -80,14 +81,6 @@ def pcap_extract(pcap_path, hosts):
             tcp["win"] = max(tcp.get("win", 0), p["TCP"].window)
 
 
-def print_progress(done, total):
-    print("\r", end="")
-
-    prog = (done/total)*10
-    print("[" + int(prog)*"=" + math.ceil(10-prog)*"-" + "] {0:.2f}% ({1}/{2})".format(prog*10, done, total), end="")
-    sys.stdout.flush()
-
-
 def database_extract(output, database, label_path, pcap_path):
     host_map = {}
     tls_map = {}
@@ -124,14 +117,13 @@ def database_extract(output, database, label_path, pcap_path):
             if not host_map.get(ip):
                 host_map[ip] = modules.host.Host(ip)
             module_name = row["name"]
-
             port = row["port"]
-            mod_class = modules.modules.get(module_name)
-            if not mod_class:
-                continue
+
             if port == 0:
+                mod_obj = modules.get_module(module_name)
+                if not mod_obj:
+                    continue
                 # ip module stuff
-                mod_obj = mod_class()
                 mod_obj.add_data(row)
 
                 if mod_obj.name == "geoip":
@@ -143,12 +135,12 @@ def database_extract(output, database, label_path, pcap_path):
                 if module_name == "tls":
                     port_obj = tls_map.get("{}:{}".format(ip, port))
                     if not port_obj:
-                        port_obj = mod_class()
+                        port_obj = modules.get_port("tls")
                         tls_map["{}:{}".format(ip, port)] = port_obj
                 else:
                     port_obj = host_map[ip].ports.get(port)
                     if not port_obj:
-                        port_obj = mod_class(port)
+                        port_obj = modules.get_port(module_name, port)
                         host_map[ip].insert_port(port_obj)
 
                 try:
@@ -168,7 +160,7 @@ def database_extract(output, database, label_path, pcap_path):
         port = int(port)
         port_obj = host_map[ip].ports.get(port)
         if not port_obj:
-            port_obj = modules.modules.get("unknown")(port)
+            port_obj = modules.get_port("generic", port)
             host_map[ip].insert_port(port_obj)
         port_obj.tls = tls
 
@@ -204,6 +196,8 @@ def database_extract(output, database, label_path, pcap_path):
             line = f.readline()
             while line != "":
                 csv = line.strip().split(",")
+                line = f.readline()
+
                 if len(csv) != 4:
                     continue
 
@@ -217,8 +211,6 @@ def database_extract(output, database, label_path, pcap_path):
                         pass
 
                     host_map[ip].add_label(mwdb_id, family, port)
-
-                line = f.readline()
 
         # remove labels where label port is not open
         # and remove the ip if it loses all label, since it means the relevant (C2 acting) port is closed
@@ -424,7 +416,11 @@ def match(data_in, fp_in, method, ip=None, force=False):
         y_pred = []
         labels = []
         pool = multiprocessing.Pool(2)
+        print_progress(0, len(data))
+        count = 0
         for host, matches in pool.imap(functools.partial(method.match, force=force), data.values()):
+            count += 1
+            print_progress(count, len(data))
             #matches = method.match(host, force)
 
             host_labels = host.label_str()
@@ -438,6 +434,7 @@ def match(data_in, fp_in, method, ip=None, force=False):
             y_true.append(labels.index(host_labels))
             y_pred.append(labels.index(match_labels))
 
+        print("")
         print(classification_report(y_true, y_pred, target_names=labels, zero_division=0, digits=4))
         print("Confusion Matrix")
         print("Labels:", labels)
@@ -478,7 +475,7 @@ if __name__ == "__main__":
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
     parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, nargs="+", required=True)
     parser_fingerprint.add_argument("--fp-out", help="Output file for storing the fingerprints.", type=str, required=True)
-    parser_fingerprint.add_argument("--method", help="Method to use for .", type=str, default="learn", choices=["learn"])
+    parser_fingerprint.add_argument("--method", help="Method to use for .", type=str, default="cluster", choices=["cluster"])
     # sub-command stats
     parser_stats = subparsers.add_parser("stats", help="Print statistics from host data.")
     parser_stats.add_argument("--data-in", help="Data file to print statistics from.", type=str, required=True)
@@ -487,7 +484,7 @@ if __name__ == "__main__":
     parser_match = subparsers.add_parser("match", help="Match a host to fingerprinted hosts.")
     parser_match.add_argument("--fp-in", help="Fingerprints to use for matching.", type=str, required=True)
     parser_match.add_argument("--data-in", help="Data file to match with.", type=str, nargs="+", required=True)
-    parser_match.add_argument("--method", help="Method to use for matching.", type=str, default="learn", choices=methods.methods.keys())
+    parser_match.add_argument("--method", help="Method to use for matching.", type=str, default="cluster", choices=methods.methods.keys())
     parser_match.add_argument("--force", help="Force comparison of two hosts even if they share IP address.", action="store_true", default=False)
     parser_match.add_argument("--host", help="The specific host IP in the data file to match with.", type=str)
 
