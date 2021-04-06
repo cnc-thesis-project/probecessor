@@ -280,6 +280,10 @@ def print_hosts(data_in, method, ip=None):
                 print("  {}: {}".format(jarm, count))
 
 
+def split_data(data_in, test_out, fp_out, ratio, no_unlabelled):
+	print(data_in, test_out, fp_out, ratio, no_unlabelled)
+
+
 def match(data_in, fp_in, method, ip=None, force=False):
     start = time.time()
 
@@ -350,9 +354,13 @@ if __name__ == "__main__":
     parser_print.add_argument("--method", help="Information to print.", type=str, default="data", choices=["data", "jarm"])
     parser_print.add_argument("--host", help="The optional host to print from the data file.", type=str)
     # sub-command split
-    parser_split = subparsers.add_parser("split", help="Print statistics from host data.")
-    parser_split.add_argument("--data-in", help="Data file to print statistics from.", type=str, required=True)
-    parser_split.add_argument("--detail", help="Aggregate keys.", choices=["none", "keys", "values"], default="none")
+    parser_split = subparsers.add_parser("split", help="Split processed host data into fingerprint/test dataset")
+    parser_split.add_argument("--data-in", help="Extracted host data.", type=str, required=True)
+    parser_split.add_argument("--test-out", help="Test dataset output", type=str, required=True)
+    parser_split.add_argument("--fp-out", help="Fingerprint dataset output.", type=str, required=True)
+    parser_split.add_argument("--ratio", help="The ratio of hosts in test dataset.", type=float, default=0.5)
+    parser_split.add_argument("--no-unlabelled", help="Do not include any unlabeled hosts in fingerprint dataset.", action="store_true", default=False)
+
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
     parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, nargs="+", required=True)
@@ -373,7 +381,7 @@ if __name__ == "__main__":
     elif args.subcommand == "print":
         print_hosts(args.data_in, args.method, args.host)
     elif args.subcommand == "split":
-        print_statistics(args.data_in, args.detail)
+        split_data(args.data_in, args.test_out, args.fp_out, args.ratio, args.no_unlabelled)
     elif args.subcommand == "fingerprint":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
