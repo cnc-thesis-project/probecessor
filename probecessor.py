@@ -196,6 +196,8 @@ def database_extract(output, database, label_path, pcap_path):
             line = f.readline()
             while line != "":
                 csv = line.strip().split(",")
+                line = f.readline()
+
                 if len(csv) != 4:
                     continue
 
@@ -209,8 +211,6 @@ def database_extract(output, database, label_path, pcap_path):
                         pass
 
                     host_map[ip].add_label(mwdb_id, family, port)
-
-                line = f.readline()
 
         # remove labels where label port is not open
         # and remove the ip if it loses all label, since it means the relevant (C2 acting) port is closed
