@@ -280,8 +280,39 @@ def print_hosts(data_in, method, ip=None):
                 print("  {}: {}".format(jarm, count))
 
 
-def split_data(data_in, test_out, fp_out, ratio, no_unlabelled):
-	print(data_in, test_out, fp_out, ratio, no_unlabelled)
+def split_data(data_in, data_out1, data_out2, ratio):
+    # set default name if output files are not specified
+    if not data_out1:
+        data_out1 = data_in + ".split1"
+    if not data_out2:
+        data_out2 = data_in + ".split2"
+
+    # load data to split
+    data = load_data([data_in])
+
+    # categorize each host from label
+    label_hosts = {}
+    for host in data.values():
+        label = host.label_str()
+        if label not in label_hosts:
+            label_hosts[label] = []
+        label_hosts[label].append(host)
+
+    # split dataset based so it gets same ratio for each label
+    out1 = {}
+    out2 = {}
+    for label, hosts in label_hosts.items():
+        split_len = math.ceil(len(hosts) * ratio)
+        for host in hosts[:split_len]:
+            out2[host.ip] = host
+        for host in hosts[split_len:]:
+            out1[host.ip] = host
+        print("Label: {:16} ({:3} hosts) - dataset-1: {:3} hosts, dataset-2: {:3} hosts, ratio: {:04f}"
+        		.format(label, len(hosts), len(hosts) - split_len, split_len, split_len / len(hosts)))
+
+	# save splitted dataset
+    joblib.dump(out1, data_out1)
+    joblib.dump(out2, data_out2)
 
 
 def match(data_in, fp_in, method, ip=None, force=False):
@@ -354,13 +385,11 @@ if __name__ == "__main__":
     parser_print.add_argument("--method", help="Information to print.", type=str, default="data", choices=["data", "jarm"])
     parser_print.add_argument("--host", help="The optional host to print from the data file.", type=str)
     # sub-command split
-    parser_split = subparsers.add_parser("split", help="Split processed host data into fingerprint/test dataset")
+    parser_split = subparsers.add_parser("split", help="Split processed host data into two dataset")
     parser_split.add_argument("--data-in", help="Extracted host data.", type=str, required=True)
-    parser_split.add_argument("--test-out", help="Test dataset output", type=str, required=True)
-    parser_split.add_argument("--fp-out", help="Fingerprint dataset output.", type=str, required=True)
-    parser_split.add_argument("--ratio", help="The ratio of hosts in test dataset.", type=float, default=0.5)
-    parser_split.add_argument("--no-unlabelled", help="Do not include any unlabeled hosts in fingerprint dataset.", action="store_true", default=False)
-
+    parser_split.add_argument("--data-out1", help="First dataset output.", type=str, required=False)
+    parser_split.add_argument("--data-out2", help="Second dataset output.", type=str, required=False)
+    parser_split.add_argument("--ratio", help="The ratio of hosts in the second dataset.", type=float, default=0.5)
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
     parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, nargs="+", required=True)
@@ -381,7 +410,7 @@ if __name__ == "__main__":
     elif args.subcommand == "print":
         print_hosts(args.data_in, args.method, args.host)
     elif args.subcommand == "split":
-        split_data(args.data_in, args.test_out, args.fp_out, args.ratio, args.no_unlabelled)
+        split_data(args.data_in, args.data_out1, args.data_out2, args.ratio)
     elif args.subcommand == "fingerprint":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
