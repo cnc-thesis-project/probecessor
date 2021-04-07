@@ -55,7 +55,7 @@ def pcap_extract(pcap_path, hosts):
             tcp["win"] = max(tcp.get("win", 0), p["TCP"].window)
 
 
-def database_extract(output, database, label_path, pcap_path):
+def database_extract(output, database, label_path, pcap_path, keep):
     host_map = {}
     tls_map = {}
 
@@ -87,9 +87,21 @@ def database_extract(output, database, label_path, pcap_path):
                 break
 
             ip = row["ip"]
+            uuid = row["uuid"]
 
             if not host_map.get(ip):
-                host_map[ip] = modules.host.Host(ip)
+                host_map[ip] = modules.host.Host(ip, uuid)
+
+            if keep != "both" and host_map[ip].uuid != uuid:
+                if keep == "old":
+                    # don't use the probe data that comes from newer scan
+                    continue
+                elif keep == "new":
+                    # keep the newer scan , trash the older probe data
+                    host_map[ip] = modules.host.Host(ip, uuid)
+                    if ip in tls_map:
+                        del tls_map[ip]
+
             module_name = row["name"]
             port = row["port"]
 
@@ -107,10 +119,12 @@ def database_extract(output, database, label_path, pcap_path):
             else:
                 # module stuff
                 if module_name == "tls":
-                    port_obj = tls_map.get("{}:{}".format(ip, port))
+                    if ip not in tls_map:
+                        tls_map[ip] = {}
+                    port_obj = tls_map[ip].get(port)
                     if not port_obj:
                         port_obj = modules.get_port("tls")
-                        tls_map["{}:{}".format(ip, port)] = port_obj
+                        tls_map[ip][port] = port_obj
                 else:
                     port_obj = host_map[ip].ports.get(port)
                     if not port_obj:
@@ -129,14 +143,13 @@ def database_extract(output, database, label_path, pcap_path):
         print("")
 
     # adding tls module to ports
-    for ip_port, tls in tls_map.items():
-        ip, port = ip_port.split(":")
-        port = int(port)
-        port_obj = host_map[ip].ports.get(port)
-        if not port_obj:
-            port_obj = modules.get_port("generic", port)
-            host_map[ip].insert_port(port_obj)
-        port_obj.tls = tls
+    for ip, port_map in tls_map.items():
+        for port, tls in port_map.items():
+            port_obj = host_map[ip].ports.get(port)
+            if not port_obj:
+                port_obj = modules.get_port("generic", port)
+                host_map[ip].insert_port(port_obj)
+            port_obj.tls = tls
 
     # remove ip that doesn't have any ports open, or none gives any response
     print("Filtering hosts without any ports open")
@@ -379,6 +392,7 @@ if __name__ == "__main__":
     parser_extract.add_argument("--pcap-in", help="Additional pcap file.", type=str)
     parser_extract.add_argument("--db-in", help="A probeably database file.", type=str, nargs="+", required=True)
     parser_extract.add_argument("--data-out", help="Output file holding the processed host data.", type=str, required=True)
+    parser_extract.add_argument("--keep", help="Which host data to keep when it finds probe data from newer scan session.", default="both", type=str, choices=["old", "new", "both"])
     # sub-command print
     parser_print = subparsers.add_parser("print", help="Print data in the processed host data.")
     parser_print.add_argument("--data-in", help="Extracted Host data.", type=str, nargs="+", required=True)
@@ -406,7 +420,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.subcommand == "extract":
-        database_extract(args.data_out, args.db_in, args.labels_in, args.pcap_in)
+        database_extract(args.data_out, args.db_in, args.labels_in, args.pcap_in, args.keep)
     elif args.subcommand == "print":
         print_hosts(args.data_in, args.method, args.host)
     elif args.subcommand == "split":
