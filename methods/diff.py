@@ -6,8 +6,16 @@ import joblib
 from util.label import get_label_names
 import textdistance
 
-dist_threshold = 0.40
-same_port_num = True
+# maximum distance to a malicious host to alert being "similar"
+dist_threshold = 0.45
+# compare only the c2 port against other hosts port
+# when it's set to true, the distance is based only on the c2 port distance
+focus_c2_ports = False
+# all ports in two hosts with same port number must be matched, the rest depends on `random_port_match`
+force_same_port_num = True
+# try all combination of ports from two hosts and bind the ports that gives lowest distance
+random_port_match = True
+# two ports are considered totally different if the existence of tls doesn't match
 must_match_tls = True
 
 verbose = False
@@ -18,20 +26,36 @@ def is_binary_classifier():
     return False
 
 def get_default_config():
-    return {"dist_threshold": dist_threshold, "same_port_num": same_port_num}
+    return {"dist_threshold": dist_threshold, "force_c2_ports": force_c2_ports,
+            "force_same_port_num": force_same_port_num, "random_port_match": random_port_match}
 
 def get_configs():
     for threshold in range(30, 51, 1): # 0.30 - 0.50
-        yield {"dist_threshold": threshold/100.0, "same_port_num": True}
+        yield {"dist_threshold": threshold/100.0, "force_c2_ports": False,
+               "force_same_port_num": True, "random_port_match": False}
     for threshold in range(30, 51, 1): # 0.30 - 0.50
-        yield {"dist_threshold": threshold/100.0, "same_port_num": False}
+        yield {"dist_threshold": threshold/100.0, "force_c2_ports": False,
+               "force_same_port_num": True, "random_port_match": True}
+    for threshold in range(30, 51, 1): # 0.30 - 0.50
+        yield {"dist_threshold": threshold/100.0, "force_c2_ports": False,
+               "force_same_port_num": False, "random_port_match": True}
+    for threshold in range(30, 51, 1): # 0.30 - 0.50
+        yield {"dist_threshold": threshold/100.0, "force_c2_ports": False,
+               "force_same_port_num": True, "random_port_match": True}
 
 def use_config(config):
-    global dist_threshold, same_port_num, ip_distance_cache
-    if same_port_num != config["same_port_num"]:
+    global dist_threshold, ip_distance_cache
+    global force_c2_ports, force_same_port_num, random_port_match
+
+    if force_c2_ports != config["force_c2_ports"] or force_same_port_num != config["force_same_port_num"] or
+            random_port_match != config["random_port_match"]:
         ip_distance_cache.clear()
+
     dist_threshold = config["dist_threshold"]
-    same_port_num = config["same_port_num"]
+
+    force_c2_ports = config["force_c2_ports"]
+    force_same_port_num = config["force_same_port_num"]
+    random_port_match = config["random_port_match"]:
 
 def _compare_equal(value1, value2):
     return 0 if value1 == value2 else 1
@@ -117,6 +141,7 @@ for request in http_request_types:
     diff_keys["http"].append({ "name": "{}:header:transfer-encoding".format(request), "cmp": _compare_equal, "weight": 1.0 })
     diff_keys["http"].append({ "name": "{}:header:location".format(request), "cmp": _compare_equal, "weight": 1.0 })
     diff_keys["http"].append({ "name": "{}:dom_tree".format(request), "cmp": _compare_dom_tree, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:etag".format(request), "cmp": _compare_equal, "weight": 1.0 })
 
 
 def port_diff(module_name, port1, port2):
@@ -179,14 +204,9 @@ ip_distance_cache = {}
 # Returns the fingerprint match. If none match, return None.
 def match(host, force=False, test=False):
     global ip_distance_cache
-    #print(data)
-    #print(host_data)
 
     host_module_map = {} # module type -> list of Port classes
     for port in host.ports.values():
-        #if len(port.data) == 0:
-        #    # silent port
-        #    continue
         if not port.type in host_module_map:
             host_module_map[port.type] = []
         host_module_map[port.type].append(port)
@@ -204,14 +224,17 @@ def match(host, force=False, test=False):
                 ip_distances.append(ip_dist)
             continue
 
+        c2_ports = set() # port numbers that hosts C2 service
+        if focus_c2_ports:
+            for label in fp.labels:
+                c2_ports.add(label.port)
+
         fp_module_map = {} # module type -> list of Port classes
         for port in fp.ports.values():
-            #if len(port.data) == 0:
-            #    # silent port
-            #    continue
             if not port.type in fp_module_map:
                 fp_module_map[port.type] = []
-            fp_module_map[port.type].append(port)
+            if not focus_c2_ports or port.port in c2_ports:
+                fp_module_map[port.type].append(port)
 
         total_dist = 0
         max_dist = 0
@@ -219,16 +242,44 @@ def match(host, force=False, test=False):
         candidates = []
         for mod in set(fp_module_map.keys()) & set(host_module_map.keys()):
             distances = [] # list of tuple in format: (distance, fingerprint port, host port)
-            #for fp_port, host_port in itertools.product(fp_module_map[mod], host_module_map[mod]):
+
+            # TODO: JUST TESTING REMOVE THE WHOLE FOR LOOP
+            matched_ports = set()
+            if force_same_port_num:
+                for fp_port, host_port in itertools.product(fp_module_map[mod], host_module_map[mod]):
+                    if fp_port.port != host_port.port:
+                        continue
+
+                    # get distance between two ports and add the result to list distances
+                    dist = port_diff(mod, fp_port, host_port)
+                    if fp_port.tls or host_port.tls:
+                        if must_match_tls and (fp_port.tls is None or host_port.tls is None):
+                            # consider the ports as totally different and not comparable
+                            continue
+                        else:
+                            if fp_port.tls and host_port.tls:
+                                # both has tls, diff
+                                dist = (dist + port_diff("tls", fp_port.tls, host_port.tls)) / 2.0
+                            else:
+                                # either one doesn't have tls, so tls part differs
+                                dist = (dist + 1.0) / 2.0
+                    distances.append((dist, fp_port.port, host_port.port))
+
+                    matched_ports.add(fp_port.port)
+
+
             for fp_port, host_port in itertools.product(fp_module_map[mod], host_module_map[mod]):
-                if same_port_num and fp_port.port != host_port.port:
+                if not random_port_match and fp_port.port != host_port.port:
+                    continue
+                if fp_port.port in matched_ports or host_port.port in matched_ports:
+                    # already found the distance for that port(s)
                     continue
                 # get distance between two ports and add the result to list distances
                 dist = port_diff(mod, fp_port, host_port)
                 if fp_port.tls or host_port.tls:
                     if must_match_tls and (fp_port.tls is None or host_port.tls is None):
-                        # consider the ports as totally different
-                        dist = 1
+                        # consider the ports as totally different and not comparable
+                        continue
                     else:
                         if fp_port.tls and host_port.tls:
                             # both has tls, diff
@@ -242,33 +293,30 @@ def match(host, force=False, test=False):
             candidates.extend(c)
             total_dist += sum(map(lambda x: x[0], c))
 
-        fp_port_used = list(map(lambda x: x[1], candidates))
-        fp_port_left = list(filter(lambda x: x not in fp_port_used, fp.ports.keys()))
 
+        fp_port_used = list(map(lambda x: x[1], candidates))
         host_port_used = list(map(lambda x: x[2], candidates))
-        host_port_left = list(filter(lambda x: x not in host_port_used, host.ports.keys()))
+
+        # all the ports that got left will make the distance between the hosts larger
+        if focus_c2_ports:
+            # when focusing on matching c2 port only, only check the c2 port that
+            # couldn't be compared with other hosts
+            host_port_left = []
+            fp_port_left = list(filter(lambda x: x not in fp_port_used, c2_ports))
+        else:
+            host_port_left = list(filter(lambda x: x not in host_port_used, host.ports.keys()))
+            fp_port_left = list(filter(lambda x: x not in fp_port_used, fp.ports.keys()))
 
         # calculate the maximum possible distance
         for _, fp_port, host_port in candidates:
             # calculation for ports that was in both
-            fp_port_data = fp.ports[fp_port]
-            host_port_data = host.ports[host_port]
-
             max_dist += 1
-            #if "tls" in fp_port_data or "tls" in host_port_data:
-            #    max_dist += 1
 
         # calculation for ports that was only available in either one
         for data, port_left in [(fp, fp_port_left), (host, host_port_left)]:
             for port in port_left:
-                port_data = data.ports[port]
-                mod = port_data.type
-
                 total_dist += 1
                 max_dist += 1
-                #if "tls" in port_data:
-                #    total_dist += 1
-                #    max_dist += 1
 
         #print("{}, candidates: {}".format(ip, candidates))
         #print(fp_port_used, fp_port_left)
