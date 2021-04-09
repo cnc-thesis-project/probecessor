@@ -3,13 +3,14 @@ import modules.label
 
 # Represents a network host.
 class Host():
-    def __init__(self, ip):
+    def __init__(self, ip, uuid):
         self.ip = ip
         self.ports = {}
         self.labels = []
         self.geoip = None
         self.rdns = None
         self.tcp = None
+        self.uuid = uuid
 
 
     def insert_port(self, port):
