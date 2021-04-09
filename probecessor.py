@@ -321,14 +321,14 @@ def split_data(data_in, data_out1, data_out2, ratio):
         for host in hosts[split_len:]:
             out1[host.ip] = host
         print("Label: {:16} ({:3} hosts) - dataset-1: {:3} hosts, dataset-2: {:3} hosts, ratio: {:04f}"
-        		.format(label, len(hosts), len(hosts) - split_len, split_len, split_len / len(hosts)))
+                .format(label, len(hosts), len(hosts) - split_len, split_len, split_len / len(hosts)))
 
-	# save splitted dataset
+    # save splitted dataset
     joblib.dump(out1, data_out1)
     joblib.dump(out2, data_out2)
 
 
-def match(data_in, fp_in, method, ip=None, force=False):
+def match(data_in, fp_in, method, ip=None, force=False, binary=False):
     start = time.time()
 
     data = load_data(data_in)
@@ -350,10 +350,14 @@ def match(data_in, fp_in, method, ip=None, force=False):
             #matches = method.match(host, force)
 
             host_labels = host.label_str()
+            if binary and host_labels != "unlabeled":
+                host_labels = "malicious"
             if host_labels not in labels:
                 labels.append(host_labels)
 
             match_labels = Label.to_str(matches)
+            if binary and match_labels != "unlabeled":
+                match_labels = "malicious"
             if match_labels not in labels:
                 labels.append(match_labels)
 
@@ -365,7 +369,6 @@ def match(data_in, fp_in, method, ip=None, force=False):
         print("Confusion Matrix")
         print("Labels:", labels)
         print(confusion_matrix(y_true, y_pred))
-
     else:
         host = data.get(ip)
 
@@ -416,6 +419,7 @@ if __name__ == "__main__":
     parser_match.add_argument("--method", help="Method to use for matching.", type=str, default="cluster", choices=methods.methods.keys())
     parser_match.add_argument("--force", help="Force comparison of two hosts even if they share IP address.", action="store_true", default=False)
     parser_match.add_argument("--host", help="The specific host IP in the data file to match with.", type=str)
+    parser_match.add_argument("--binary", help="Perform binary (benign/malicious) classification .", action="store_true", default=False)
 
     args = parser.parse_args()
 
@@ -428,4 +432,4 @@ if __name__ == "__main__":
     elif args.subcommand == "fingerprint":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
-        match(args.data_in, args.fp_in, args.method, ip=args.host, force=args.force)
+        match(args.data_in, args.fp_in, args.method, ip=args.host, force=args.force, binary=args.binary)
