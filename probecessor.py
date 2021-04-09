@@ -233,7 +233,7 @@ def fingerprint(fp_out, data_in, method):
         sys.exit(1)
 
 
-def print_hosts(data_in, method, ip=None):
+def print_hosts(data_in, method, ip=None, label=None):
     hosts = load_data(data_in)
 
     # TODO: Support using ip parameter with JARM print.
@@ -248,7 +248,12 @@ def print_hosts(data_in, method, ip=None):
             host.print_data()
         else:
             for host in hosts.values():
-                host.print_data()
+                if label:
+                    for l in host.labels:
+                        if l.label == label:
+                            host.print_data()
+                else:
+                    host.print_data()
 
     elif method == "jarm":
         # count jarm occurence
@@ -401,6 +406,7 @@ if __name__ == "__main__":
     parser_print.add_argument("--data-in", help="Extracted Host data.", type=str, nargs="+", required=True)
     parser_print.add_argument("--method", help="Information to print.", type=str, default="data", choices=["data", "jarm"])
     parser_print.add_argument("--host", help="The optional host to print from the data file.", type=str)
+    parser_print.add_argument("--label", help="Only print hosts matching the specified label.", type=str)
     # sub-command split
     parser_split = subparsers.add_parser("split", help="Split processed host data into two dataset")
     parser_split.add_argument("--data-in", help="Extracted host data.", type=str, required=True)
@@ -426,7 +432,7 @@ if __name__ == "__main__":
     if args.subcommand == "extract":
         database_extract(args.data_out, args.db_in, args.labels_in, args.pcap_in, args.keep)
     elif args.subcommand == "print":
-        print_hosts(args.data_in, args.method, args.host)
+        print_hosts(args.data_in, args.method, args.host, args.label)
     elif args.subcommand == "split":
         split_data(args.data_in, args.data_out1, args.data_out2, args.ratio)
     elif args.subcommand == "fingerprint":
