@@ -7,7 +7,7 @@ from util.label import get_label_names
 import textdistance
 
 # maximum distance to a malicious host to alert being "similar"
-dist_threshold = 0.45
+dist_threshold = 0.40
 # compare only the c2 port against other hosts port
 # when it's set to true, the distance is based only on the c2 port distance
 focus_c2_ports = False
@@ -68,12 +68,12 @@ def _compare_histogram(value1, value2):
     return sum(map(lambda v: abs(v[0] - v[1]), zip(value1, value2))) / 2
 
 def _compare_keys(value1, value2):
-    return 0 if value1 == value2 else 1
+    #return 0 if value1 == value2 else 1
     # very very slower with very very few accuracy improvement
     return textdistance.levenshtein.distance(value1, value2) / textdistance.levenshtein.maximum(value1, value2)
 
 def _compare_dom_tree(value1, value2):
-    return 0 if value1 == value2 else 1
+    #return 0 if value1 == value2 else 1
     # very very slower with very very few accuracy improvement
     if value1 == value2:
         return 0
@@ -88,6 +88,7 @@ diff_keys = {
         # populated at runtime using code
     ],
     "ssh": [
+        { "name": "server", "cmp": _compare_equal, "weight": 1.0 },
         { "name": "ciphers:kex_algorithms", "cmp": _compare_keys, "weight": 1.0 },
         { "name": "ciphers:server_host_key_algorithms", "cmp": _compare_keys, "weight": 1.0 },
         { "name": "ciphers:encryption_algorithms_client_to_server", "cmp": _compare_keys, "weight": 1.0 },
@@ -98,11 +99,11 @@ diff_keys = {
         { "name": "ciphers:compression_algorithms_server_to_client", "cmp": _compare_keys, "weight": 1.0 },
         { "name": "ciphers:languages_client_to_server", "cmp": _compare_keys, "weight": 1.0 },
         { "name": "ciphers:languages_server_to_client", "cmp": _compare_keys, "weight": 1.0 },
-        { "name": "ssh-rsa:size", "cmp": _compare_keys, "weight": 1.0 },
-        { "name": "ssh-ed25519:size", "cmp": _compare_keys, "weight": 1.0 },
-        { "name": "ecdsa-sha2-nistp256:size", "cmp": _compare_keys, "weight": 1.0 },
-        { "name": "ecdsa-sha2-nistp384:size", "cmp": _compare_keys, "weight": 1.0 },
-        { "name": "ecdsa-sha2-nistp521:size", "cmp": _compare_keys, "weight": 1.0 },
+        { "name": "ssh-rsa:size", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "ssh-ed25519:size", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "ecdsa-sha2-nistp256:size", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "ecdsa-sha2-nistp384:size", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "ecdsa-sha2-nistp521:size", "cmp": _compare_equal, "weight": 1.0 },
     ],
     "tls": [
         { "name": "subject", "cmp": _compare_equal, "weight": 1.0 },
