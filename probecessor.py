@@ -14,7 +14,7 @@ from modules.label import Label
 import joblib
 import math
 import time
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, precision_score
 import multiprocessing
 import functools
 
@@ -333,47 +333,105 @@ def split_data(data_in, data_out1, data_out2, ratio):
     joblib.dump(out2, data_out2)
 
 
-def match(data_in, fp_in, method, ip=None, force=False, binary=False):
-    start = time.time()
-
+def match(data_in, fp_in, match_methods, ip=None, force=False, binary=False, log_path=None, test=False):
     data = load_data(data_in)
-    method = methods.methods[method]
-    method.load_fingerprints(fp_in)
-    num_matched = 0
+
+    if log_path:
+        log_file = open(log_path, "w")
+
+    results = []
 
     if not ip:
-        num_matched = 0
-        y_true = []
-        y_pred = []
-        labels = []
-        pool = multiprocessing.Pool(2)
-        print_progress(0, len(data))
-        count = 0
-        for host, matches in pool.imap(functools.partial(method.match, force=force), data.values()):
-            count += 1
-            print_progress(count, len(data))
-            #matches = method.match(host, force)
+        for method_name in match_methods:
+            method = methods.methods[method_name]
+            method.load_fingerprints(fp_in)
+            if test:
+                configs = method.get_configs()
+            else:
+                configs = [method.get_default_config()]
 
-            host_labels = host.label_str()
-            if binary and host_labels != "unlabeled":
-                host_labels = "malicious"
-            if host_labels not in labels:
-                labels.append(host_labels)
+            num_matched = 0
 
-            match_labels = Label.to_str(matches)
-            if binary and match_labels != "unlabeled":
-                match_labels = "malicious"
-            if match_labels not in labels:
-                labels.append(match_labels)
+            for conf in configs:
+                method.use_config(conf)
 
-            y_true.append(labels.index(host_labels))
-            y_pred.append(labels.index(match_labels))
+                start = time.time()
 
-        print("")
-        print(classification_report(y_true, y_pred, target_names=labels, zero_division=0, digits=4))
-        print("Confusion Matrix")
-        print("Labels:", labels)
-        print(confusion_matrix(y_true, y_pred))
+                num_matched = 0
+                y_true = []
+                y_pred = []
+                labels = []
+                print_progress(0, len(data))
+                count = 0
+
+                if test:
+                    # cannot use pool in test because diff method needs to cache results
+                    # which won't work with multiprocessing
+                    match_map = map(functools.partial(method.match, force=force, test=test), data.values())
+                else:
+                    pool = multiprocessing.Pool(3)
+                    match_map = pool.imap_unordered(functools.partial(method.match, force=force, test=test), data.values())
+
+                for host, matches in match_map:
+                    count += 1
+                    print_progress(count, len(data))
+
+                    host_labels = host.label_str()
+                    if (method.is_binary_classifier() or binary) and host_labels != "unlabeled":
+                        host_labels = "malicious"
+                    if host_labels not in labels:
+                        labels.append(host_labels)
+
+                    match_labels = Label.to_str(matches)
+                    if (method.is_binary_classifier() or binary) and match_labels != "unlabeled":
+                        match_labels = "malicious"
+                    if match_labels not in labels:
+                        labels.append(match_labels)
+
+                    y_true.append(labels.index(host_labels))
+                    y_pred.append(labels.index(match_labels))
+
+                if not test:
+                    pool.close()
+
+                end = time.time()
+
+                report = classification_report(y_true, y_pred, target_names=labels, zero_division=0, digits=5)
+
+                perf_text = " ----- Performance result -----\n"
+                perf_text += "Method: {}\n".format(method_name)
+                perf_text += "Config: " + ", ".join("{} = {}".format(k, v) for k, v in conf.items()) + "\n"
+                perf_text += str(report) + "\n"
+                perf_text += "Confusion Matrix (x-axis: guess, y-axis: true)\n"
+                perf_text += "Labels: {}\n".format(labels)
+                perf_text += str(confusion_matrix(y_true, y_pred)) + "\n"
+                perf_text += "Took {} seconds to perform".format(end-start)
+                perf_text += "\n\n"
+
+                precision = precision_score(y_true, y_pred, average="micro")
+                results.append({"method": method_name, "config": conf, "precision": precision})
+
+                if log_path:
+                    log_file.write(perf_text)
+                    log_file.flush()
+
+                print("")
+                print(perf_text)
+
+        # if two or more methods were used, print precision ranking
+        if len(results) > 1:
+            result_text = " ----- Best performing method/config -----\n"
+            for i, result in enumerate(sorted(results, key=lambda k: k["precision"], reverse=True)):
+                result_text += "{}.\n".format(i+1)
+                result_text += "Method: {}\n".format(result["method"])
+                result_text += "Config: " + ", ".join("{} = {}".format(k, v) for k, v in result["config"].items()) + "\n"
+                result_text += "Precision: {}\n\n".format(result["precision"])
+
+            if log_path:
+                log_file.write(result_text)
+
+            print(result_text)
+
     else:
         host = data.get(ip)
 
@@ -381,8 +439,9 @@ def match(data_in, fp_in, method, ip=None, force=False, binary=False):
             print("Error: No host {} exists in data file.".format(ip))
             sys.exit(1)
 
-    end = time.time()
-    print("Match function took {} seconds to complete".format(end-start))
+    if log_path:
+        log_file.close()
+
 
 def load_data(data_path):
     data = {}
@@ -422,10 +481,12 @@ if __name__ == "__main__":
     parser_match = subparsers.add_parser("match", help="Match a host to fingerprinted hosts.")
     parser_match.add_argument("--fp-in", help="Fingerprints to use for matching.", type=str, required=True)
     parser_match.add_argument("--data-in", help="Data file to match with.", type=str, nargs="+", required=True)
-    parser_match.add_argument("--method", help="Method to use for matching.", type=str, default="cluster", choices=methods.methods.keys())
+    parser_match.add_argument("--method", help="Method(s) to use for matching.", type=str, default="cluster", nargs="+", choices=methods.methods.keys())
     parser_match.add_argument("--force", help="Force comparison of two hosts even if they share IP address.", action="store_true", default=False)
     parser_match.add_argument("--host", help="The specific host IP in the data file to match with.", type=str)
     parser_match.add_argument("--binary", help="Perform binary (benign/malicious) classification .", action="store_true", default=False)
+    parser_match.add_argument("--log", help="The path to log the performance results.", type=str)
+    parser_match.add_argument("--test", help="Test performance of the specified methods using different configs.", action="store_true", default=False)
 
     args = parser.parse_args()
 
@@ -438,4 +499,5 @@ if __name__ == "__main__":
     elif args.subcommand == "fingerprint":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
-        match(args.data_in, args.fp_in, args.method, ip=args.host, force=args.force, binary=args.binary)
+        match(args.data_in, args.fp_in, args.method, ip=args.host, force=args.force,
+              binary=args.binary, log_path=args.log, test=args.test)

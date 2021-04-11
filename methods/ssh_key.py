@@ -3,6 +3,19 @@ import modules.label
 
 pubkey_label = {}
 
+def is_binary_classifier():
+    return False
+
+def get_default_config():
+    return {}
+
+def get_configs():
+    return [{}]
+
+def use_config(config):
+	pass
+
+
 def load_fingerprints(fp_path):
     global pubkey_label
     fp_hosts = joblib.load(fp_path)
@@ -36,7 +49,7 @@ def load_fingerprints(fp_path):
 
 
 # Returns the fingerprint match. If none match, return None.
-def match(host, force=False):
+def match(host, force=False, test=False):
     for port in host.ports.values():
         if not port or port.type != "ssh":
             continue
