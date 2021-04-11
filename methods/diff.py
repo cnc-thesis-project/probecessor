@@ -9,8 +9,29 @@ import textdistance
 dist_threshold = 0.40
 same_port_num = True
 must_match_tls = True
+
+verbose = False
+
 fp_hosts = {}
 
+def is_binary_classifier():
+    return False
+
+def get_default_config():
+    return {"dist_threshold": dist_threshold, "same_port_num": same_port_num}
+
+def get_configs():
+    for threshold in range(30, 51, 1): # 0.30 - 0.50
+        yield {"dist_threshold": threshold/100.0, "same_port_num": True}
+    for threshold in range(30, 51, 1): # 0.30 - 0.50
+        yield {"dist_threshold": threshold/100.0, "same_port_num": False}
+
+def use_config(config):
+    global dist_threshold, same_port_num, ip_distance_cache
+    if same_port_num != config["same_port_num"]:
+        ip_distance_cache.clear()
+    dist_threshold = config["dist_threshold"]
+    same_port_num = config["same_port_num"]
 
 def _compare_equal(value1, value2):
     return 0 if value1 == value2 else 1
@@ -149,9 +170,10 @@ def load_fingerprints(fp_path):
     global fp_hosts
     fp_hosts = joblib.load(fp_path)
 
-
+ip_distance_cache = {}
 # Returns the fingerprint match. If none match, return None.
-def match(host, force=False):
+def match(host, force=False, test=False):
+    global ip_distance_cache
     #print(data)
     #print(host_data)
 
@@ -169,6 +191,14 @@ def match(host, force=False):
         if ip == host.ip:
             # don't perform self comparison
             continue
+
+        if test and "{}:{}".format(host.ip, fp.ip) in ip_distance_cache:
+            # only relevant when doing performance test
+            ip_dist = ip_distance_cache["{}:{}".format(host.ip, fp.ip)]
+            if ip_dist[0] <= dist_threshold:
+                ip_distances.append(ip_dist)
+            continue
+
         fp_module_map = {} # module type -> list of Port classes
         for port in fp.ports.values():
             #if len(port.data) == 0:
@@ -245,6 +275,9 @@ def match(host, force=False):
 
         if total_dist <= dist_threshold:
             ip_distances.append((total_dist, fp))
+        if test:
+            # cache the distance to be able to reuse it
+            ip_distance_cache["{}:{}".format(host.ip, fp.ip)] = (total_dist, fp)
 
     if len(ip_distances) == 0:
         return (host, [])
@@ -252,12 +285,13 @@ def match(host, force=False):
     ip_distances = sorted(ip_distances, key=lambda x: x[0])
 
     _, closest = ip_distances[0]
-    print("IP distances (distance: {}-{}, closest label: {}, label match: {})"
-            .format(ip_distances[0][0],ip_distances[-1][0], closest.label_str(), closest.label_str() == host.label_str()))
+    if verbose:
+        print("IP distances (distance: {}-{}, closest label: {}, label match: {})"
+                .format(ip_distances[0][0],ip_distances[-1][0], closest.label_str(), closest.label_str() == host.label_str()))
 
-    host_labels = host.label_str()
-    for c in ip_distances:
-        dist, fp_host = c
-        print("Distance from {} ({}) to {} ({}): {}".format(host.ip, host_labels, fp_host.ip, fp_host.label_str(), dist))
+        host_labels = host.label_str()
+        for c in ip_distances:
+            dist, fp_host = c
+            print("Distance from {} ({}) to {} ({}): {}".format(host.ip, host_labels, fp_host.ip, fp_host.label_str(), dist))
 
     return (host, closest.labels)

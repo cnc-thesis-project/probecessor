@@ -3,6 +3,19 @@ import modules.label
 
 hash_label = {}
 
+def is_binary_classifier():
+    return False
+
+def get_default_config():
+    return {}
+
+def get_configs():
+    return [{}]
+
+def use_config(config):
+	pass
+
+
 def load_fingerprints(fp_path):
     global subject_label
     fp_hosts = joblib.load(fp_path)
@@ -21,7 +34,7 @@ def load_fingerprints(fp_path):
             hash_label[hash] = label
 
 # Returns the fingerprint match. If none match, return None.
-def match(host, force=False):
+def match(host, force=False, test=False):
     for port in host.ports.values():
         if not port or not port.tls:
             continue
