@@ -419,8 +419,8 @@ def match(data_in, fp_in, match_methods, ip=None, force=False, binary=False, log
                 print(perf_text)
 
         # if two or more methods were used, print precision ranking
-        if len(match_methods) > 1:
-            result_text = " ----- Best performnig method/config -----\n"
+        if len(results) > 1:
+            result_text = " ----- Best performing method/config -----\n"
             for i, result in enumerate(sorted(results, key=lambda k: k["precision"], reverse=True)):
                 result_text += "{}.\n".format(i+1)
                 result_text += "Method: {}\n".format(result["method"])
