@@ -232,28 +232,6 @@ def port_diff(module_name, port1, port2):
         max_dist = 1
     return distance / max_dist
 
-    # TODO: nuke these
-    for key_meta in diff_keys[module_name]:
-        key = key_meta["name"]
-        value1 = port1_data.get(key)
-        value2 = port2_data.get(key)
-        if value1 is None and value2 is None:
-            # both doesn't have the key -> don't count
-            key_dist = 0
-        elif value1 is None or value2 is None:
-            # either one lacks the key -> not similar!
-            key_dist = 1
-            max_dist += 1
-        else:
-            # both have the key -> compare the values and get distance
-            key_dist = key_meta["cmp"](value1, value2)
-            max_dist += 1
-        distance += key_dist
-    if max_dist == 0:
-        # means distance is 0 as well, so doesn't matter what max_dist is as long as it's not 0
-        max_dist = 1
-    return distance / max_dist
-
 def connect_ports(distances):
     fp_ports = set(map(lambda x: x[1], distances))
     host_ports = set(map(lambda x: x[2], distances))
