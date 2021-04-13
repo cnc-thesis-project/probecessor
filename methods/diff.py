@@ -3,11 +3,12 @@ from pprint import pprint
 import json
 import html_similarity
 import joblib
+import tlsh
 from util.label import get_label_names
 import textdistance
 
 # maximum distance to a malicious host to alert being "similar"
-dist_threshold = 0.40
+dist_threshold = 0.4
 # compare only the c2 port against other hosts port
 # when it's set to true, the distance is based only on the c2 port distance
 focus_c2_ports = False
@@ -18,7 +19,7 @@ random_port_match = True
 # two ports are considered totally different if the existence of tls doesn't match
 must_match_tls = True
 
-verbose = False
+verbose = True
 
 fp_hosts = {}
 
@@ -26,36 +27,34 @@ def is_binary_classifier():
     return False
 
 def get_default_config():
-    return {"dist_threshold": dist_threshold, "force_c2_ports": force_c2_ports,
+    return {"dist_threshold": dist_threshold, "focus_c2_ports": focus_c2_ports,
             "force_same_port_num": force_same_port_num, "random_port_match": random_port_match}
 
 def get_configs():
-    for threshold in range(30, 51, 1): # 0.30 - 0.50
-        yield {"dist_threshold": threshold/100.0, "force_c2_ports": False,
+    for threshold in range(20, 51, 1): # 0.20 - 0.50
+        yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
                "force_same_port_num": True, "random_port_match": False}
-    for threshold in range(30, 51, 1): # 0.30 - 0.50
-        yield {"dist_threshold": threshold/100.0, "force_c2_ports": False,
+    for threshold in range(20, 51, 1): # 0.20 - 0.50
+        yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
                "force_same_port_num": True, "random_port_match": True}
-    for threshold in range(30, 51, 1): # 0.30 - 0.50
-        yield {"dist_threshold": threshold/100.0, "force_c2_ports": False,
-               "force_same_port_num": False, "random_port_match": True}
-    for threshold in range(30, 51, 1): # 0.30 - 0.50
-        yield {"dist_threshold": threshold/100.0, "force_c2_ports": False,
-               "force_same_port_num": True, "random_port_match": True}
+    #for threshold in range(20, 51, 1): # 0.20 - 0.50
+    #    yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
+    #           "force_same_port_num": False, "random_port_match": True}
+
 
 def use_config(config):
     global dist_threshold, ip_distance_cache
-    global force_c2_ports, force_same_port_num, random_port_match
+    global focus_c2_ports, force_same_port_num, random_port_match
 
-    if force_c2_ports != config["force_c2_ports"] or force_same_port_num != config["force_same_port_num"] or
+    if focus_c2_ports != config["focus_c2_ports"] or force_same_port_num != config["force_same_port_num"] or \
             random_port_match != config["random_port_match"]:
         ip_distance_cache.clear()
 
     dist_threshold = config["dist_threshold"]
 
-    force_c2_ports = config["force_c2_ports"]
+    focus_c2_ports = config["focus_c2_ports"]
     force_same_port_num = config["force_same_port_num"]
-    random_port_match = config["random_port_match"]:
+    random_port_match = config["random_port_match"]
 
 def _compare_equal(value1, value2):
     return 0 if value1 == value2 else 1
@@ -68,12 +67,12 @@ def _compare_histogram(value1, value2):
     return sum(map(lambda v: abs(v[0] - v[1]), zip(value1, value2))) / 2
 
 def _compare_keys(value1, value2):
-    #return 0 if value1 == value2 else 1
+    return 0 if value1 == value2 else 1
     # very very slower with very very few accuracy improvement
     return textdistance.levenshtein.distance(value1, value2) / textdistance.levenshtein.maximum(value1, value2)
 
 def _compare_dom_tree(value1, value2):
-    #return 0 if value1 == value2 else 1
+    return 0 if value1 == value2 else 1
     # very very slower with very very few accuracy improvement
     if value1 == value2:
         return 0
@@ -81,6 +80,21 @@ def _compare_dom_tree(value1, value2):
         return 1 - html_similarity.structural_similarity(value1, value2)
     except AttributeError:
         return 1
+
+def _compare_tlsh(value1, value2):
+    if value1 == "TNULL" and value2 == "TNULL":
+        return 0
+    elif value1 == "TNULL" or value2 == "TNULL":
+        return 1
+    else:
+        return min(tlsh.diff(value1, value2) / 100, 1)
+
+def _compare_strings(value1, value2):
+    union = len(value1 | value2)
+    if union == 0:
+        return 0
+    return len(value1 & value2) / union
+
 
 # note: weight is not implemented
 diff_keys = {
@@ -116,9 +130,9 @@ diff_keys = {
         { "name": "not_after", "cmp": _compare_equal, "weight": 1.0 },
         { "name": "valid_period", "cmp": _compare_equal, "weight": 1.0 },
         { "name": "is_valid", "cmp": _compare_equal, "weight": 1.0 },
+        { "name": "jarm", "cmp": _compare_equal, "weight": 1.0 },
         #{ "name": "valid_domains", "cmp": _compare_equal, "weight": 1.0 },
         #{ "name": "valid_ips", "cmp": _compare_equal, "weight": 1.0 },
-        { "name": "jarm", "cmp": _compare_equal, "weight": 1.0 },
     ],
 }
 
@@ -128,6 +142,8 @@ for generic in ["unknown", "smtp", "pop3", "ftp", "imap"]:
             { "name": "sha256", "cmp": _compare_equal, "weight": 1.0 },
             { "name": "entropy", "cmp": _compare_entropy, "weight": 1.0 },
             { "name": "histogram", "cmp": _compare_histogram, "weight": 1.0 },
+            { "name": "strings", "cmp": _compare_strings, "weight": 1.0 },
+            #{ "name": "tlsh", "cmp": _compare_tlsh, "weight": 1.0 },
         ]
 
 http_request_types = ["get_root", "head_root", "delete_root", "very_simple_get", "not_exist",
@@ -146,11 +162,77 @@ for request in http_request_types:
 
 
 def port_diff(module_name, port1, port2):
-    distance = 0
-    # TODO: check for silent port
-    max_dist = 0
     port1_data = {k.lower(): v for k, v in port1.get_properties()}
     port2_data = {k.lower(): v for k, v in port2.get_properties()}
+    key_cmp = {d["name"]: {"cmp": d["cmp"], "weight": d["weight"]} for d in diff_keys[module_name]}
+
+    checked_keys = set()
+
+    distance = 0
+    max_dist = 0
+
+    for key, _ in port1.get_properties():
+        low_key = key.lower()
+        checked_keys.add(low_key)
+
+        if module_name == "http":
+            if key.endswith(":response_start") or key.endswith(":response_end"):
+                # not interested in response time data
+                continue
+        elif low_key not in key_cmp:
+            # for non-http, the key must exist in diff_keys
+            # http is exception because it has to check http headers that isn't in diff_keys
+            continue
+
+        if low_key in key_cmp:
+            # note that 'key' is used instead of low_key since it's case sensitive
+            # the key-value cmp will be considered different even if both have the same header as long as the cases don't match
+            if port2.has_property(key):
+                value1 = port1.get_property(key)
+                value2 = port2.get_property(key)
+
+                if value1 is None and value2 is None:
+                    max_dist += 1
+                elif value1 is None or value2 is None:
+                    # either one lacks the value -> not similar!
+                    distance += 1
+                    max_dist += 1
+                else:
+                    # both have the key -> compare the values and get distance
+                    distance += key_cmp[low_key]["cmp"](value1, value2)
+            else:
+                distance += 1
+            max_dist += 1
+        else:
+            # not in the list => should be header key that is not listed in diff_keys
+            # for these, check only the existence match in both port
+            if not port2.has_property(key):
+                distance += 1
+            max_dist += 1
+
+    for key, _ in port2.get_properties():
+        if key.lower() in checked_keys:
+            # already compared in last for-loop
+            continue
+        if module_name == "http":
+            if key.endswith(":response_start") or key.endswith(":response_end"):
+                # not interested in response time data
+                continue
+        elif low_key not in key_cmp:
+            # for non-http, the key must exist in diff_keys
+            # http is exception because it has to check http headers that isn't in diff_keys
+            continue
+
+        # all these keys don't exist in port1
+        distance += 1
+        max_dist += 1
+
+    if max_dist == 0:
+        # means distance is 0 as well, so doesn't matter what max_dist is as long as it's not 0
+        max_dist = 1
+    return distance / max_dist
+
+    # TODO: nuke these
     for key_meta in diff_keys[module_name]:
         key = key_meta["name"]
         value1 = port1_data.get(key)
