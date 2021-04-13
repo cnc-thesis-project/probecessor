@@ -3,8 +3,10 @@ import numpy
 import modules.port
 import hashlib
 import tlsh
+import re
 from modules.protocol import identify_protocol
 
+word_reg = re.compile(b"[a-zA-Z0-9-_]{4,}")
 
 class GenericPort(modules.port.Port):
     def __init__(self, port):
@@ -46,22 +48,26 @@ class GenericPort(modules.port.Port):
             return histogram(data)
         elif name == "tlsh":
             return tlsh.hash(data)
+        elif name == "strings":
+            return set(word_reg.findall(data))
         return None
 
 
     def get_properties(self):
+        data = self._concat_data()
         ret = {
-            "data": self._concat_data(),
-            "sha256": hashlib.sha256(self._concat_data()).hexdigest(),
-            "entropy": entropy(self._concat_data()),
-            "histogram": histogram(self._concat_data()),
-            "tlsh": tlsh.hash(self._concat_data()),
+            "data": data,
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "entropy": entropy(data),
+            "histogram": histogram(data),
+            "tlsh": tlsh.hash(data),
+            "strings": set(word_reg.findall(data)),
         }
         return ret.items()
 
 
     def has_property(self, name):
-        return name in ["data", "sha256", "entropy", "histogram", "tlsh"]
+        return name in ["data", "sha256", "entropy", "histogram", "tlsh", "strings"]
 
 
 def entropy(data):
