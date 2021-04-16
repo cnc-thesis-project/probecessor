@@ -230,7 +230,9 @@ def port_diff(module_name, port1, port2):
     if max_dist == 0:
         # means distance is 0 as well, so doesn't matter what max_dist is as long as it's not 0
         max_dist = 1
-    return distance / max_dist
+    port_dist = distance / max_dist
+
+    return port_dist
 
 def connect_ports(distances):
     fp_ports = set(map(lambda x: x[1], distances))
@@ -278,9 +280,10 @@ def match(host, force=False, test=False):
             # don't perform self comparison
             continue
 
-        if test and "{}:{}".format(host.ip, fp.ip) in ip_distance_cache:
+        ip_sorted = list(sorted((host.ip, fp.ip)))
+        if test and "{}:{}".format(*ip_sorted) in ip_distance_cache:
             # only relevant when doing performance test
-            ip_dist = ip_distance_cache["{}:{}".format(host.ip, fp.ip)]
+            ip_dist = ip_distance_cache["{}:{}".format(*ip_sorted)]
             if ip_dist[0] <= dist_threshold:
                 ip_distances.append(ip_dist)
             continue
@@ -391,7 +394,7 @@ def match(host, force=False, test=False):
             ip_distances.append((total_dist, fp))
         if test:
             # cache the distance to be able to reuse it
-            ip_distance_cache["{}:{}".format(host.ip, fp.ip)] = (total_dist, fp)
+            ip_distance_cache["{}:{}".format(*sorted((host.ip, fp.ip)))] = (total_dist, fp)
 
     if len(ip_distances) == 0:
         return (host, [])
@@ -409,3 +412,7 @@ def match(host, force=False, test=False):
             print("Distance from {} ({}) to {} ({}): {}".format(host.ip, host_labels, fp_host.ip, fp_host.label_str(), dist))
 
     return (host, closest.labels)
+
+# Analyze distance 
+def post_match():
+    pass
