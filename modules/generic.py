@@ -12,6 +12,7 @@ class GenericPort(modules.port.Port):
     def __init__(self, port):
         super().__init__("unknown", port)
         self.data_map = {}
+        self.cached_data = {}
 
 
     def add_data(self, row):
@@ -26,6 +27,7 @@ class GenericPort(modules.port.Port):
         if not self.data_map.get(t):
             self.data_map[t] = []
         self.data_map[t].append(data)
+        self.cached_data = self._create_data()
 
 
     def _concat_data(self):
@@ -35,27 +37,9 @@ class GenericPort(modules.port.Port):
                 data += d
         return data
 
-
-    def get_property(self, name):
+    def _create_data(self):
         data = self._concat_data()
-        if name == "data":
-            return data
-        elif name == "sha256":
-            return hashlib.sha256(data).hexdigest()
-        elif name == "entropy":
-            return entropy(data)
-        elif name == "histogram":
-            return histogram(data)
-        elif name == "tlsh":
-            return tlsh.hash(data)
-        elif name == "strings":
-            return set(word_reg.findall(data))
-        return None
-
-
-    def get_properties(self):
-        data = self._concat_data()
-        ret = {
+        return {
             "data": data,
             "sha256": hashlib.sha256(data).hexdigest(),
             "entropy": entropy(data),
@@ -63,7 +47,12 @@ class GenericPort(modules.port.Port):
             "tlsh": tlsh.hash(data),
             "strings": set(word_reg.findall(data)),
         }
-        return ret.items()
+
+    def get_property(self, name):
+        return self.cached_data.get(name)
+
+    def get_properties(self):
+        return self.cached_data.items()
 
 
     def has_property(self, name):
