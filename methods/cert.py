@@ -1,7 +1,7 @@
 import joblib
 import modules.label
 
-hash_label = {}
+_hash_label = {}
 
 def is_binary_classifier():
     return False
@@ -13,25 +13,31 @@ def get_configs():
     return [{}]
 
 def use_config(config):
-	pass
+    pass
 
 
-def load_fingerprints(fp_path):
-    global subject_label
-    fp_hosts = joblib.load(fp_path)
-    for fp_host in fp_hosts.values():
+def get_fingerprints(hosts):
+    for host in hosts.values():
         checked_ports = set()
-        for label in fp_host.labels:
+        for label in host.labels:
             if label.port in checked_ports:
                 continue
             checked_ports.add(label.port)
 
-            port = fp_host.ports.get(label.port)
+            port = host.ports.get(label.port)
             if not port or not port.tls:
                 continue
 
             hash = port.tls.get_property("key_sha256")
-            hash_label[hash] = label
+            _hash_label[hash] = label
+
+    return _hash_label
+
+
+def use_fingerprints(fps):
+    global _hash_label
+    _hash_label = fps
+
 
 # Returns the fingerprint match. If none match, return None.
 def match(host, force=False, test=False):
@@ -40,7 +46,7 @@ def match(host, force=False, test=False):
             continue
 
         hash = port.tls.get_property("key_sha256")
-        if hash in hash_label:
-            return (host, [hash_label[hash]])
+        if hash in _hash_label:
+            return (host, [_hash_label[hash]])
 
     return (host, [])

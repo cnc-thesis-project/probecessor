@@ -1,7 +1,7 @@
 import joblib
 import modules.label
 
-pubkey_label = {}
+_pubkey_label = {}
 
 def is_binary_classifier():
     return False
@@ -13,14 +13,18 @@ def get_configs():
     return [{}]
 
 def use_config(config):
-	pass
+    pass
 
 
-def load_fingerprints(fp_path):
-    global pubkey_label
-    fp_hosts = joblib.load(fp_path)
-    for fp_host in fp_hosts.values():
-        for port in fp_host.ports.values():
+def use_fingerprints(fps):
+    global _pubkey_label
+    _pubkey_label = fps
+
+
+def get_fingerprints(fps):
+    _pubkey_label = {}
+    for host in fps.values():
+        for port in host.ports.values():
             if port.type != "ssh":
                 continue
 
@@ -30,22 +34,23 @@ def load_fingerprints(fp_path):
                 if not hash:
                     continue
 
-                if not hash in pubkey_label:
-                    pubkey_label[hash] = {}
+                if not hash in _pubkey_label:
+                    _pubkey_label[hash] = {}
 
                 print(hash)
 
-                label = fp_host.label_str()
-                if label in pubkey_label[hash]:
-                    pubkey_label[hash][label] += 1
+                label = host.label_str()
+                if label in _pubkey_label[hash]:
+                    _pubkey_label[hash][label] += 1
                 else:
-                    pubkey_label[hash][label] = 1
+                    _pubkey_label[hash][label] = 1
 
-    for hash in pubkey_label:
+    for hash in _pubkey_label:
         # get the most occuring label for each ssh key hash
-        l = max(pubkey_label[hash].items(), key = lambda k: k[1])[0]
+        l = max(_pubkey_label[hash].items(), key = lambda k: k[1])[0]
         # convert to Label object since match function needs to return in that format
-        pubkey_label[hash] = modules.label.Label("", l, None)
+        _pubkey_label[hash] = modules.label.Label("", l, None)
+    return _pubkey_label
 
 
 # Returns the fingerprint match. If none match, return None.
@@ -54,7 +59,7 @@ def match(host, force=False, test=False):
         if not port or port.type != "ssh":
             continue
         hash = port.get_property("hash")
-        if hash in pubkey_label:
-            return (host, [pubkey_label[hash]])
+        if hash in _pubkey_label:
+            return (host, [_pubkey_label[hash]])
 
     return (host, [])

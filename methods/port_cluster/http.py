@@ -1,5 +1,5 @@
-from methods.cluster.vectors import list_to_order_list, ListOrderVectorizer, construct_vector
-from methods.cluster.utils import cluster_module_data, match_module_clusters
+from methods.port_cluster.vectors import list_to_order_list, ListOrderVectorizer, construct_vector
+from methods.port_cluster.utils import cluster_module_data, match_module_clusters
 
 
 class StatusCodeVectorizer():
@@ -22,7 +22,10 @@ def get_data(http_port):
     return data
 
 
-match = match_module_clusters
+#match = match_module_clusters
+def match(data1, data2):
+    return data1["vector"] == data2["vector"]
+
 
 
 _request_types = [

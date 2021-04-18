@@ -166,9 +166,14 @@ def connect_ports(distances):
     return candidates
 
 
-def load_fingerprints(fp_path):
+def get_fingerprints(hosts):
+    return hosts
+
+
+def use_fingerprints(fps):
     global fp_hosts
-    fp_hosts = joblib.load(fp_path)
+    fp_hosts = fps
+
 
 ip_distance_cache = {}
 # Returns the fingerprint match. If none match, return None.

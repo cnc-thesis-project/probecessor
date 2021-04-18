@@ -6,6 +6,7 @@ from pprint import pprint
 import sys
 from methods.cluster.utils import cluster_module_data
 import methods.cluster.models
+import modules.label
 
 import methods.cluster.http
 import methods.cluster.ssh
@@ -28,7 +29,7 @@ def _get_module_handler(module_name):
 
 
 # TODO: Use number of clusters per mod instead of a global value.
-NUM_CLUSTERS = 20
+NUM_CLUSTERS = 16
 
 host_fingerprints = []
 
@@ -45,7 +46,10 @@ def convert_module(module):
 def convert_host(host):
     host_data = {"ports": {}, "ip": host.ip, "labels": host.labels }
     for port in host.ports.values():
-        host_data["ports"][port.port] = convert_module(port)
+        labels = host.get_port_label(port.port, False)
+        print("port labels for {}:".format(port.port), labels)
+        if len(labels):
+            host_data["ports"][port.port] = convert_module(port)
 
     return host_data
 
@@ -124,20 +128,36 @@ def fingerprint_host_data(host_data):
             cluster_module_data(port_data)
 
 
-def match_host_data(host_data1, host_data2):
-    if len(host_data2["ports"]) > len(host_data1["ports"]):
-        tmp_host = host_data2
-        host_data2 = host_data1
-        host_data1 = tmp_host
+def match_host_data_to_fingerprint(fp_host_data, host_data):
+    same_label = False
+    if len(fp_host_data["labels"]) and len(host_data["labels"]):
+        if fp_host_data["labels"][0].label == host_data["labels"][0].label:
+            same_label = True
 
-    for port_num, port_data1 in host_data1["ports"].items():
-        port_data2 = host_data2["ports"].get(port_num)
-        if port_data2:
-            if not match_mod_data(port_data1, port_data2):
-                return False
+    if same_label:
+        print("\nComparing {} to {}".format(fp_host_data["labels"][0].label, host_data["labels"][0].label))
+        print("Fingerprint: {}".format(fp_host_data["ip"]))
+        print("Match host: {}".format(host_data["ip"]))
+
+    if len(fp_host_data["ports"]) > len(host_data["ports"]) or len(fp_host_data["ports"]) == 0:
+        return False
+
+    matches = True
+    for port_num, fp_port_data in fp_host_data["ports"].items():
+        port_data = host_data["ports"].get(port_num)
+        if port_data:
+            mod_match = match_mod_data(fp_port_data, port_data)
+            if same_label:
+                print("    {}: {} {} {}".format(port_num, fp_port_data["module"], "==" if mod_match else "!=", port_data["module"]))
+            if not mod_match:
+                matches = False
         else:
-            return False
-    return True
+            if same_label:
+                print("    {}: {} {} {}".format(port_num, fp_port_data["module"], "!=", "(no port)"))
+            matches == False
+    if matches and same_label:
+        print("* MATCH *")
+    return matches
 
 
 def match_mod_data(mod_data1, mod_data2):
@@ -151,6 +171,8 @@ def match(host, force=False):
     host_data = convert_host(host)
     fingerprint_host_data(host_data)
 
+    labels_matched = {}
+
     if not host_data:
         return (host,[])
 
@@ -160,19 +182,18 @@ def match(host, force=False):
             #print("Refusing to compare host {} with itself. Use the --force, Luke.".format(host.ip))
             continue
 
-        if match_host_data(fp_host_data, host_data):
-            return (host, fp_host_data["labels"])
-        else:
-            if len(fp_host_data["labels"]) > 0:
-                if fp_host_data["labels"][0].label == host_data["labels"][0].label:
-                    print("NO MATCH ({} != {})".format(fp_host_data["labels"][0].label, host_data["labels"][0].label))
-                    print("    {}".format(fp_host_data["ip"]))
-                    for port, port_data in fp_host_data["ports"].items():
-                        if port_data.get("cluster"):
-                            print("        {}: {}".format(port, port_data["cluster"]))
-                    print("    {}".format(host_data["ip"]))
-                    for port, port_data in host_data["ports"].items():
-                        if port_data.get("cluster"):
-                            print("        {}: {}".format(port, port_data["cluster"]))
+        if match_host_data_to_fingerprint(fp_host_data, host_data):
+            label_str = modules.label.Label.to_str(fp_host_data["labels"])
+            if not labels_matched.get(label_str):
+                labels_matched[label_str] = {"count": 0, "labels":[]}
+            labels_matched[label_str]["count"] += 1
+            labels_matched[label_str]["labels"].extend(fp_host_data["labels"])
 
-    return (host, [])
+    max_count = 0
+    labels = []
+    for l in labels_matched.values():
+        if max_count < l["count"]:
+            max_count = l["count"]
+            labels = l["labels"]
+
+    return (host, labels)
