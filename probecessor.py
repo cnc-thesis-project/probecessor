@@ -222,15 +222,22 @@ def database_extract(output, database, label_path, pcap_path, keep):
 
     dbh.close()
 
-def fingerprint(fp_out, data_in, method):
+def fingerprint(fp_out, data_in, method_names):
     data = load_data(data_in)
 
-    method_func = methods.methods.get(method)
-    if method_func:
-        method_func.store_fingerprints(fp_out, data)
-    else:
-        print("Error: method {} not found".format(method))
-        sys.exit(1)
+    print("Fingerprinting ...")
+
+    method_fingerprints = {}
+    for method_name in method_names:
+        method_func = methods.methods.get(method_name)
+        if method_func:
+            method_fingerprints[method_name] = method_func.get_fingerprints(data)
+            print("Saved {} fingerprints for {} method".format(len(data), method_name))
+        else:
+            print("Error: method {} not found".format(method_name))
+            sys.exit(1)
+
+    joblib.dump(method_fingerprints, fp_out)
 
 
 def print_hosts(data_in, method, ip=None, label=None):
@@ -298,7 +305,7 @@ def print_hosts(data_in, method, ip=None, label=None):
                 print("  {}: {}".format(jarm, count))
 
 
-def split_data(data_in, data_out1, data_out2, ratio):
+def split_data(data_in, data_out1, data_out2, ratio=None, exclude=None):
     # set default name if output files are not specified
     if not data_out1:
         data_out1 = data_in + ".split1"
@@ -307,34 +314,49 @@ def split_data(data_in, data_out1, data_out2, ratio):
 
     # load data to split
     data = load_data([data_in])
-
-    # categorize each host from label
     label_hosts = {}
     for host in data.values():
         label = host.label_str()
-        if label not in label_hosts:
-            label_hosts[label] = []
-        label_hosts[label].append(host)
+        label_hosts.setdefault(label, []).append(host)
 
-    # split dataset based so it gets same ratio for each label
     out1 = {}
     out2 = {}
-    for label, hosts in label_hosts.items():
-        split_len = math.ceil(len(hosts) * ratio)
-        for host in hosts[:split_len]:
-            out2[host.ip] = host
-        for host in hosts[split_len:]:
-            out1[host.ip] = host
-        print("Label: {:16} ({:3} hosts) - dataset-1: {:3} hosts, dataset-2: {:3} hosts, ratio: {:04f}"
-                .format(label, len(hosts), len(hosts) - split_len, split_len, split_len / len(hosts)))
+    if ratio:
+        # split dataset based so it gets same ratio for each label
+        for label, hosts in label_hosts.items():
+            split_len = math.ceil(len(hosts) * ratio)
+            for host in hosts[:split_len]:
+                out2[host.ip] = host
+            for host in hosts[split_len:]:
+                out1[host.ip] = host
+            print("Label: {:16} ({:3} hosts) - dataset-1: {:3} hosts, dataset-2: {:3} hosts, ratio: {:04f}"
+                    .format(label, len(hosts), len(hosts) - split_len, split_len, split_len / len(hosts)))
+    elif exclude:
+        for label, hosts in label_hosts.items():
+            for host in hosts:
+                if exclude == label:
+                    out2[host.ip] = host
+                else:
+                    out1[host.ip] = host
+        print("({:3} hosts) - dataset-1: {:3} hosts, dataset-2: {:3} hosts".format(len(data), len(out1),  len(out2)))
+    else:
+        print("Error: One of '--exlude' or '--ratio' must be specified.")
+        sys.exit(1)
+
 
     # save splitted dataset
     joblib.dump(out1, data_out1)
     joblib.dump(out2, data_out2)
 
 
-def match(data_in, fp_in, match_methods, ip=None, force=False, binary=False, log_path=None, test=False):
+def match(data_in, fp_in, method_names, ip=None, force=False, binary=False, log_path=None, test=False):
     data = load_data(data_in)
+    fps = joblib.load(fp_in)
+
+    if not method_names:
+        method_names = list(fps.keys())
+
+    print("Matching ...")
 
     if log_path:
         log_file = open(log_path, "w")
@@ -342,9 +364,15 @@ def match(data_in, fp_in, match_methods, ip=None, force=False, binary=False, log
     results = []
 
     if not ip:
-        for method_name in match_methods:
+        for method_name in method_names:
+            if not methods.methods.get(method_name):
+                print("Warning: no such method '{}'".format(method_name))
+                continue
+            if not fps.get(method_name):
+                print("Warning: the fingerprint file does not contain a fingerprint for method '{}'".format(method_name))
+                continue
             method = methods.methods[method_name]
-            method.load_fingerprints(fp_in)
+            method.use_fingerprints(fps[method_name])
             if test:
                 configs = method.get_configs()
             else:
@@ -369,7 +397,7 @@ def match(data_in, fp_in, match_methods, ip=None, force=False, binary=False, log
                     # which won't work with multiprocessing
                     match_map = map(functools.partial(method.match, force=force, test=test), data.values())
                 else:
-                    pool = multiprocessing.Pool(3)
+                    pool = multiprocessing.Pool(1)
                     match_map = pool.imap_unordered(functools.partial(method.match, force=force, test=test), data.values())
 
                 for host, matches in match_map:
@@ -471,17 +499,18 @@ if __name__ == "__main__":
     parser_split.add_argument("--data-in", help="Extracted host data.", type=str, required=True)
     parser_split.add_argument("--data-out1", help="First dataset output.", type=str, required=False)
     parser_split.add_argument("--data-out2", help="Second dataset output.", type=str, required=False)
-    parser_split.add_argument("--ratio", help="The ratio of hosts in the second dataset.", type=float, default=0.5)
+    parser_split.add_argument("--ratio", help="The ratio of hosts in the second dataset.", type=float)
+    parser_split.add_argument("--exclude", help="Exclude this label from the first dataset. The second dataset will only contain this label.", type=str)
     # sub-command fingerprint
     parser_fingerprint = subparsers.add_parser("fingerprint", help="Generate fingerprint from host data file.")
     parser_fingerprint.add_argument("--data-in", help="Host data to use for constructing fingerprints.", type=str, nargs="+", required=True)
     parser_fingerprint.add_argument("--fp-out", help="Output file for storing the fingerprints.", type=str, required=True)
-    parser_fingerprint.add_argument("--method", help="Method to use for .", type=str, default="cluster", choices=["cluster"])
+    parser_fingerprint.add_argument("--method", help="Method to use for .", type=str, nargs="+", required=True, choices=methods.methods.keys())
     # sub-command match
     parser_match = subparsers.add_parser("match", help="Match a host to fingerprinted hosts.")
     parser_match.add_argument("--fp-in", help="Fingerprints to use for matching.", type=str, required=True)
     parser_match.add_argument("--data-in", help="Data file to match with.", type=str, nargs="+", required=True)
-    parser_match.add_argument("--method", help="Method(s) to use for matching.", type=str, default="cluster", nargs="+", choices=methods.methods.keys())
+    parser_match.add_argument("--method", help="Method(s) to use for matching.", type=str, nargs="+", choices=methods.methods.keys())
     parser_match.add_argument("--force", help="Force comparison of two hosts even if they share IP address.", action="store_true", default=False)
     parser_match.add_argument("--host", help="The specific host IP in the data file to match with.", type=str)
     parser_match.add_argument("--binary", help="Perform binary (benign/malicious) classification .", action="store_true", default=False)
@@ -495,7 +524,7 @@ if __name__ == "__main__":
     elif args.subcommand == "print":
         print_hosts(args.data_in, args.method, args.host, args.label)
     elif args.subcommand == "split":
-        split_data(args.data_in, args.data_out1, args.data_out2, args.ratio)
+            split_data(args.data_in, args.data_out1, args.data_out2, ratio=args.ratio, exclude=args.exclude)
     elif args.subcommand == "fingerprint":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":

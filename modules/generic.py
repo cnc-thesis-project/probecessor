@@ -45,8 +45,6 @@ class GenericPort(modules.port.Port):
         elif name == "histogram":
             return histogram(data)
         elif name == "tlsh":
-            if len(data) < 50:
-                return None
             return tlsh.hash(data)
         return None
 
