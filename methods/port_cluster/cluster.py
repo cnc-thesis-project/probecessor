@@ -152,8 +152,8 @@ def get_fingerprints(data):
 def use_fingerprints(fp):
     global _fingerprints
     _fingerprints = fp
-    print("Loaded {} port fingerprints".format(len(_fingerprints["ports"])))
-    print("Loaded models:", _fingerprints.get("module_models"))
+    #print("Loaded {} port fingerprints".format(len(_fingerprints["ports"])))
+    #print("Loaded models:", _fingerprints.get("module_models"))
     methods.port_cluster.models.models = _fingerprints["module_models"]
 
 

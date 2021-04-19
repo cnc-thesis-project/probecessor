@@ -284,7 +284,7 @@ def fingerprint(fp_out, data_in, method_names):
             sys.exit(1)
 
     print("Training method model ...")
-    rf = RandomForestClassifier()
+    rf = RandomForestClassifier(n_estimators=750)
     X = []
     y = []
 
@@ -434,15 +434,17 @@ def split_data(data_in, data_out1, data_out2, ratio=None, exclude=None):
     joblib.dump(out2, data_out2)
 
 
-def match2(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False, inception=False):
+def match2(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False, inception=True):
     data = load_data(data_in)
     fps = joblib.load(fp_in)
 
-    method_names = list(fps["method_fingerprints"].keys())
+    if inception:
+        method_names = list(fps["method_fingerprints"].keys())
+    else:
+        method_names = ["port-cluster"] # TODO: temporary hard coded list
 
     print("Matching ...")
 
-    if inception:
     rf = fps["_method_model"]
     label_id_map = fps["_label_id_map"]
     id_label_map = {v: k for k, v in label_id_map.items()}
@@ -471,9 +473,22 @@ def match2(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, te
             method.use_fingerprints(fps["method_fingerprints"][method_name])
 
             _, labels = method.match(host, force=force, test=test)
-            x.append(label_id_map.get(Label.to_str(labels), -1))
+            if inception:
+                lstr = Label.to_str(labels)
+                lid = label_id_map.get(lstr, -1)
+                x.append(lid)
+            else:
+                # TODO: fix this!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                lstr = Label.to_str(labels)
+                lid = label_id_map.get(lstr, -1)
+                y_pred.append(lid)
+                break
 
-        y_pred.append(rf.predict([x])[0])
+        if inception:
+            y_pred.append(rf.predict([x])[0])
+        else:
+            pass
+            #y_pred.append(lid)
         y_true.append(label_id_map.get(host.label_str(), -1))
 
 
