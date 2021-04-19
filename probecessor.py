@@ -314,11 +314,16 @@ def fingerprint(fp_out, data_in, method_names):
             x[i] = lid
 
     for i in range(len(y)):
-        y[i] = label_id_map[y[i]]
+        # TODO: remove code duplication below
+        l = y[i]
+        if l not in label_id_map:
+            label_id_map[l] = highest_lid
+            highest_lid += 1
+        lid = label_id_map[l]
+        y[i] = lid
 
     rf.fit(X, y)
 
-    print("label_id_map", label_id_map)
     method_fingerprints["_method_model"] = rf
     method_fingerprints["_label_id_map"] = label_id_map
 
@@ -443,19 +448,23 @@ def match2(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, te
     else:
         method_names = ["port-cluster"] # TODO: temporary hard coded list
 
+    for method_name in method_names:
+        method = methods.methods.get(method_name)
+        if not method:
+            print("Error: Invalid method '{}' in fingerprint file".format(method_name))
+            sys.exit(1)
+        method.use_fingerprints(fps["method_fingerprints"][method_name])
+
     print("Matching ...")
 
     rf = fps["_method_model"]
     label_id_map = fps["_label_id_map"]
     id_label_map = {v: k for k, v in label_id_map.items()}
     id_label_list = [-1]*len(id_label_map)
-    print("label_id_map", label_id_map)
-    print("id_label_map", id_label_map)
     for k, v in id_label_map.items():
         id_label_list[k] = v
-    print("id_label_list", id_label_list)
 
-    y_pred = []
+    X = []
     y_true = []
 
     i = 0
@@ -466,11 +475,6 @@ def match2(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, te
         x = []
         for method_name in method_names:
             method = methods.methods.get(method_name)
-            # TODO: only run use_fingerprints once for each method.
-            if not method:
-                print("Error: Invalid method '{}' in fingerprint file".format(method_name))
-                sys.exit(1)
-            method.use_fingerprints(fps["method_fingerprints"][method_name])
 
             _, labels = method.match(host, force=force, test=test)
             if inception:
@@ -485,19 +489,16 @@ def match2(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, te
                 break
 
         if inception:
-            y_pred.append(rf.predict([x])[0])
+            X.append(x)
         else:
             pass
             #y_pred.append(lid)
         y_true.append(label_id_map.get(host.label_str(), -1))
 
 
-    print("y pred:", y_pred)
-    print("y true:", y_true)
+    y_pred = rf.predict(X)
 
     report = classification_report(y_true, y_pred, labels=list(sorted(id_label_map.keys())), target_names=id_label_list, zero_division=0, digits=5)
-
-    print("Predicted:", y_pred)
 
     print(report)
 
