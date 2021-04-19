@@ -15,6 +15,7 @@ import joblib
 import math
 import time
 from sklearn.metrics import classification_report, confusion_matrix, precision_score
+from sklearn.ensemble import RandomForestClassifier
 import multiprocessing
 import functools
 
@@ -271,15 +272,55 @@ def fingerprint(fp_out, data_in, method_names):
 
     print("Fingerprinting ...")
 
-    method_fingerprints = {}
+    method_fingerprints = {"method_fingerprints": {}}
+    method_names = sorted(method_names)
     for method_name in method_names:
         method_func = methods.methods.get(method_name)
         if method_func:
-            method_fingerprints[method_name] = method_func.get_fingerprints(data)
+            method_fingerprints["method_fingerprints"][method_name] = method_func.get_fingerprints(data)
             print("Saved {} fingerprints for {} method".format(len(data), method_name))
         else:
             print("Error: method {} not found".format(method_name))
             sys.exit(1)
+
+    print("Training method model ...")
+    rf = RandomForestClassifier()
+    X = []
+    y = []
+
+    i = 0
+    for host in data.values():
+        print_progress(i, len(data))
+        i += 1
+        x = []
+        for method_name in method_names:
+            method_func = methods.methods.get(method_name)
+            method_func.use_fingerprints(method_fingerprints["method_fingerprints"][method_name])
+            _, labels = method_func.match(host)
+            x.append(Label.to_str(labels))
+        X.append(x)
+        y.append(host.label_str())
+
+    highest_lid = 0
+    label_id_map = {}
+    # convert labels to numbers
+    for x in X:
+        for i in range(len(x)):
+            l = x[i]
+            if l not in label_id_map:
+                label_id_map[l] = highest_lid
+                highest_lid += 1
+            lid = label_id_map[l]
+            x[i] = lid
+
+    for i in range(len(y)):
+        y[i] = label_id_map[y[i]]
+
+    rf.fit(X, y)
+
+    print("label_id_map", label_id_map)
+    method_fingerprints["_method_model"] = rf
+    method_fingerprints["_label_id_map"] = label_id_map
 
     joblib.dump(method_fingerprints, fp_out)
 
@@ -393,12 +434,65 @@ def split_data(data_in, data_out1, data_out2, ratio=None, exclude=None):
     joblib.dump(out2, data_out2)
 
 
-def match(data_in, fp_in, method_names, ip=None, force=False, binary=False, log_path=None, test=False, latex=False):
+def match2(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False, inception=False):
     data = load_data(data_in)
     fps = joblib.load(fp_in)
 
-    if not method_names:
-        method_names = list(fps.keys())
+    method_names = list(fps["method_fingerprints"].keys())
+
+    print("Matching ...")
+
+    if inception:
+    rf = fps["_method_model"]
+    label_id_map = fps["_label_id_map"]
+    id_label_map = {v: k for k, v in label_id_map.items()}
+    id_label_list = [-1]*len(id_label_map)
+    print("label_id_map", label_id_map)
+    print("id_label_map", id_label_map)
+    for k, v in id_label_map.items():
+        id_label_list[k] = v
+    print("id_label_list", id_label_list)
+
+    y_pred = []
+    y_true = []
+
+    i = 0
+    for host in data.values():
+        print_progress(i, len(data))
+        i += 1
+
+        x = []
+        for method_name in method_names:
+            method = methods.methods.get(method_name)
+            # TODO: only run use_fingerprints once for each method.
+            if not method:
+                print("Error: Invalid method '{}' in fingerprint file".format(method_name))
+                sys.exit(1)
+            method.use_fingerprints(fps["method_fingerprints"][method_name])
+
+            _, labels = method.match(host, force=force, test=test)
+            x.append(label_id_map.get(Label.to_str(labels), -1))
+
+        y_pred.append(rf.predict([x])[0])
+        y_true.append(label_id_map.get(host.label_str(), -1))
+
+
+    print("y pred:", y_pred)
+    print("y true:", y_true)
+
+    report = classification_report(y_true, y_pred, labels=list(sorted(id_label_map.keys())), target_names=id_label_list, zero_division=0, digits=5)
+
+    print("Predicted:", y_pred)
+
+    print(report)
+
+
+
+def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False, latex=False):
+    data = load_data(data_in)
+    fps = joblib.load(fp_in)
+
+    method_names = list(fps.keys())
 
     print("Matching ...")
 
@@ -576,5 +670,9 @@ if __name__ == "__main__":
     elif args.subcommand == "fingerprint":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
-        match(args.data_in, args.fp_in, args.method, ip=args.host, force=args.force,
-              binary=args.binary, log_path=args.log, test=args.test, latex=args.latex)
+        #match(args.data_in, args.fp_in, args.method, ip=args.host, force=args.force,
+        #      binary=args.binary, log_path=args.log, test=args.test, latex=args.latex)
+        #TODO: fix match instead of using match2
+        match2(args.data_in, args.fp_in, ip=args.host, force=args.force,
+              binary=args.binary, log_path=args.log, test=args.test)
+>>>>>>> 5ef1469 (Inception)
