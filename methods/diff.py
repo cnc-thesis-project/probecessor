@@ -6,6 +6,10 @@ import joblib
 import tlsh
 from util.label import get_label_names
 import textdistance
+import matplotlib.pyplot as plt
+import pandas as pd
+import os
+import sys
 
 # maximum distance to a malicious host to alert being "similar"
 dist_threshold = 0.4
@@ -15,11 +19,12 @@ focus_c2_ports = False
 # all ports in two hosts with same port number must be matched, the rest depends on `random_port_match`
 force_same_port_num = True
 # try all combination of ports from two hosts and bind the ports that gives lowest distance
-random_port_match = True
+random_port_match = False
 # two ports are considered totally different if the existence of tls doesn't match
 must_match_tls = True
 
-verbose = True
+verbose = False
+plot = False
 
 fp_hosts = {}
 
@@ -31,15 +36,25 @@ def get_default_config():
             "force_same_port_num": force_same_port_num, "random_port_match": random_port_match}
 
 def get_configs():
+    global plot
+    plot = True
     for threshold in range(20, 51, 1): # 0.20 - 0.50
         yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
                "force_same_port_num": True, "random_port_match": False}
+        if plot:
+            break
+    plot = True
     for threshold in range(20, 51, 1): # 0.20 - 0.50
         yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
                "force_same_port_num": True, "random_port_match": True}
-    #for threshold in range(20, 51, 1): # 0.20 - 0.50
-    #    yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
-    #           "force_same_port_num": False, "random_port_match": True}
+        if plot:
+            break
+    plot = True
+    for threshold in range(20, 51, 1): # 0.20 - 0.50
+        yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
+               "force_same_port_num": False, "random_port_match": True}
+        if plot:
+            break
 
 
 def use_config(config):
@@ -55,6 +70,10 @@ def use_config(config):
     focus_c2_ports = config["focus_c2_ports"]
     force_same_port_num = config["force_same_port_num"]
     random_port_match = config["random_port_match"]
+
+    if force_same_port_num == False and random_port_match == False:
+        print("Error: force_same_port_num and random_port_match cannot be set to False together")
+        sys.exit(1)
 
 def _compare_equal(value1, value2):
     return 0 if value1 == value2 else 1
@@ -157,13 +176,11 @@ for request in http_request_types:
     diff_keys["http"].append({ "name": "{}:header:connection".format(request), "cmp": _compare_equal, "weight": 1.0 })
     diff_keys["http"].append({ "name": "{}:header:transfer-encoding".format(request), "cmp": _compare_equal, "weight": 1.0 })
     diff_keys["http"].append({ "name": "{}:header:location".format(request), "cmp": _compare_equal, "weight": 1.0 })
+    diff_keys["http"].append({ "name": "{}:header:etag".format(request), "cmp": _compare_equal, "weight": 1.0 })
     diff_keys["http"].append({ "name": "{}:dom_tree".format(request), "cmp": _compare_dom_tree, "weight": 1.0 })
-    diff_keys["http"].append({ "name": "{}:etag".format(request), "cmp": _compare_equal, "weight": 1.0 })
 
 
 def port_diff(module_name, port1, port2):
-    port1_data = {k.lower(): v for k, v in port1.get_properties()}
-    port2_data = {k.lower(): v for k, v in port2.get_properties()}
     key_cmp = {d["name"]: {"cmp": d["cmp"], "weight": d["weight"]} for d in diff_keys[module_name]}
 
     checked_keys = set()
@@ -211,7 +228,8 @@ def port_diff(module_name, port1, port2):
             max_dist += 1
 
     for key, _ in port2.get_properties():
-        if key.lower() in checked_keys:
+        low_key = key.lower()
+        if low_key in checked_keys:
             # already compared in last for-loop
             continue
         if module_name == "http":
@@ -283,7 +301,7 @@ def match(host, force=False, test=False):
         ip_sorted = list(sorted((host.ip, fp.ip)))
         if test and "{}:{}".format(*ip_sorted) in ip_distance_cache:
             # only relevant when doing performance test
-            ip_dist = ip_distance_cache["{}:{}".format(*ip_sorted)]
+            ip_dist = ip_distance_cache["{}:{}".format(*ip_sorted)][:2]
             if ip_dist[0] <= dist_threshold:
                 ip_distances.append(ip_dist)
             continue
@@ -307,12 +325,15 @@ def match(host, force=False, test=False):
         for mod in set(fp_module_map.keys()) & set(host_module_map.keys()):
             distances = [] # list of tuple in format: (distance, fingerprint port, host port)
 
-            # TODO: JUST TESTING REMOVE THE WHOLE FOR LOOP
-            matched_ports = set()
+            fp_matched_ports = set()
+            host_matched_ports = set()
             if force_same_port_num:
                 for fp_port, host_port in itertools.product(fp_module_map[mod], host_module_map[mod]):
                     if fp_port.port != host_port.port:
                         continue
+
+                    fp_matched_ports.add(fp_port.port)
+                    host_matched_ports.add(host_port.port)
 
                     # get distance between two ports and add the result to list distances
                     dist = port_diff(mod, fp_port, host_port)
@@ -329,13 +350,10 @@ def match(host, force=False, test=False):
                                 dist = (dist + 1.0) / 2.0
                     distances.append((dist, fp_port.port, host_port.port))
 
-                    matched_ports.add(fp_port.port)
-
-
             for fp_port, host_port in itertools.product(fp_module_map[mod], host_module_map[mod]):
                 if not random_port_match and fp_port.port != host_port.port:
                     continue
-                if fp_port.port in matched_ports or host_port.port in matched_ports:
+                if fp_port.port in fp_matched_ports or host_port.port in host_matched_ports:
                     # already found the distance for that port(s)
                     continue
                 # get distance between two ports and add the result to list distances
@@ -382,6 +400,8 @@ def match(host, force=False, test=False):
                 total_dist += 1
                 max_dist += 1
 
+        #print(fp.ports.keys(), host.ports.keys())
+        #print(host.ip, "candidates:", candidates, "\n")
         #print("{}, candidates: {}".format(ip, candidates))
         #print(fp_port_used, fp_port_left)
         #print(host_port_used, host_port_left)
@@ -394,7 +414,7 @@ def match(host, force=False, test=False):
             ip_distances.append((total_dist, fp))
         if test:
             # cache the distance to be able to reuse it
-            ip_distance_cache["{}:{}".format(*sorted((host.ip, fp.ip)))] = (total_dist, fp)
+            ip_distance_cache["{}:{}".format(*sorted((host.ip, fp.ip)))] = (total_dist, fp, host)
 
     if len(ip_distances) == 0:
         return (host, [])
@@ -413,6 +433,52 @@ def match(host, force=False, test=False):
 
     return (host, closest.labels)
 
-# Analyze distance 
+# Analyze ip distance
 def post_match():
-    pass
+    global plot
+    if not plot:
+        return
+    plot = False
+
+    distances = {}
+    for ip_dist in ip_distance_cache.values():
+        dist, host1, host2 = ip_dist
+
+        for label1, label2 in [(host1.label_str(), host2.label_str()), (host2.label_str(), host1.label_str())]:
+            if label1 == "unlabeled":
+                # this comparison will be done when label1 is c2 label
+                continue
+            if label2 != "unlabeled" and label1 != label2:
+                # if both are c2, but not same label
+                label2_tmp = label2
+                label2 = "C2"
+
+            if label1 not in distances:
+                distances[label1] = {}
+            if label2 not in distances[label1]:
+                distances[label1][label2] = []
+
+            distances[label1][label2].append(dist)
+
+            if label1 == label2:
+                # avoid counting same label twice
+                break
+
+    for source_label, dists in distances.items():
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(5, 5))
+        data = pd.DataFrame(dict(
+            distance=distances[source_label][source_label] + distances[source_label]["unlabeled"],
+            label=[source_label] * len(distances[source_label][source_label]) + ["benign"] * len(distances[source_label]["unlabeled"]),
+            source=[source_label] *( len(distances[source_label][source_label]) + len(distances[source_label]["unlabeled"]))
+        ))
+
+        ax.violinplot([distances[source_label]["unlabeled"], distances[source_label][source_label]])
+        ax.set_title("{} distance".format(source_label))
+        ax.set_ylabel("Distance")
+        ax.set_xlabel("Occurence")
+        ax.set_ylim([0, 1])
+        ax.set_xticks(range(1, 3))
+        ax.set_xticklabels(["benign", source_label])
+
+        os.makedirs("plots/{}_{}_{}".format(focus_c2_ports, force_same_port_num, random_port_match), exist_ok=True)
+        plt.savefig("plots/{}_{}_{}/{}".format(focus_c2_ports, force_same_port_num, random_port_match, source_label))
