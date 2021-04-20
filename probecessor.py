@@ -283,14 +283,13 @@ def fingerprint(fp_out, data_in, method_names):
             print("Error: method {} not found".format(method_name))
             sys.exit(1)
 
-    print("Training method model ...")
     rf = RandomForestClassifier(n_estimators=750)
     X = []
     y = []
 
+    print_progress(0, len(data))
     i = 0
     for host in data.values():
-        print_progress(i, len(data))
         i += 1
         x = []
         for method_name in method_names:
@@ -300,6 +299,8 @@ def fingerprint(fp_out, data_in, method_names):
             x.append(Label.to_str(labels))
         X.append(x)
         y.append(host.label_str())
+        print_progress(i, len(data))
+    print("")
 
     highest_lid = 0
     label_id_map = {}
@@ -322,12 +323,14 @@ def fingerprint(fp_out, data_in, method_names):
         lid = label_id_map[l]
         y[i] = lid
 
+    print("Training method model ...")
     rf.fit(X, y)
 
     method_fingerprints["_method_model"] = rf
     method_fingerprints["_label_id_map"] = label_id_map
 
     joblib.dump(method_fingerprints, fp_out)
+    print("Saved fingerprints to '{}'".format(fp_out))
 
 
 def print_hosts(data_in, method, ip=None, label=None):
@@ -439,14 +442,11 @@ def split_data(data_in, data_out1, data_out2, ratio=None, exclude=None):
     joblib.dump(out2, data_out2)
 
 
-def match2(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False, inception=True):
+def match2(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False):
     data = load_data(data_in)
     fps = joblib.load(fp_in)
 
-    if inception:
-        method_names = list(fps["method_fingerprints"].keys())
-    else:
-        method_names = ["port-cluster"] # TODO: temporary hard coded list
+    method_names = list(fps["method_fingerprints"].keys())
 
     for method_name in method_names:
         method = methods.methods.get(method_name)
@@ -467,35 +467,26 @@ def match2(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, te
     X = []
     y_true = []
 
+    print_progress(0, len(data))
     i = 0
     for host in data.values():
-        print_progress(i, len(data))
-        i += 1
-
         x = []
         for method_name in method_names:
             method = methods.methods.get(method_name)
 
             _, labels = method.match(host, force=force, test=test)
-            if inception:
-                lstr = Label.to_str(labels)
-                lid = label_id_map.get(lstr, -1)
-                x.append(lid)
-            else:
-                # TODO: fix this!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                lstr = Label.to_str(labels)
-                lid = label_id_map.get(lstr, -1)
-                y_pred.append(lid)
-                break
+            lstr = Label.to_str(labels)
+            lid = label_id_map.get(lstr, -1)
+            x.append(lid)
 
-        if inception:
-            X.append(x)
-        else:
-            pass
-            #y_pred.append(lid)
+        X.append(x)
         y_true.append(label_id_map.get(host.label_str(), -1))
 
+        i += 1
+        print_progress(i, len(data))
+    print("")
 
+    print("Predicting methods ...")
     y_pred = rf.predict(X)
 
     report = classification_report(y_true, y_pred, labels=list(sorted(id_label_map.keys())), target_names=id_label_list, zero_division=0, digits=5)
@@ -691,4 +682,3 @@ if __name__ == "__main__":
         #TODO: fix match instead of using match2
         match2(args.data_in, args.fp_in, ip=args.host, force=args.force,
               binary=args.binary, log_path=args.log, test=args.test)
->>>>>>> 5ef1469 (Inception)

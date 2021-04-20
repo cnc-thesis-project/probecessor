@@ -139,12 +139,12 @@ def get_fingerprints(data):
 
     # Train open ports model
     print("Training open ports classifier ...")
-    rf = RandomForestClassifier()
-    rf.fit(open_ports_X, open_ports_y)
+    cls = RandomForestClassifier()
+    cls.fit(open_ports_X, open_ports_y)
 
 
     fingerprints["module_models"] = methods.port_cluster.models.models
-    fingerprints["open_ports_model"] = rf
+    fingerprints["open_ports_model"] = cls
 
     return fingerprints
 
