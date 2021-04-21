@@ -18,6 +18,50 @@ from sklearn.metrics import classification_report, confusion_matrix, precision_s
 import multiprocessing
 import functools
 
+
+def report_to_latex_table(report):
+    latex = ""
+    metric_names = [
+        "precision",
+        "recall",
+        "f1-score",
+        "support",
+    ]
+    # Print header
+    latex += " & " + " & ".join(metric_names) + " \\\\\n"
+
+    summary_metric_names = [
+        "weighted avg",
+        "macro avg",
+        "accuracy",
+    ]
+
+    summary_metrics = {}
+
+    for summary_metric_name in summary_metric_names:
+        summary_metrics[summary_metric_name] = report[summary_metric_name]
+
+    for label in sorted(report.keys()):
+        if label in summary_metric_names:
+            continue
+        metrics = report[label]
+        latex += label
+        for metric_name in metric_names:
+            latex += " & " + str(metrics[metric_name])
+        latex += " \\\\\n"
+
+    latex += "accuracy & & &" + str(summary_metrics["accuracy"]) + " & \\\\\n"
+    for summary_metric_name, summary_metric in summary_metrics.items():
+        if summary_metric_name == "accuracy":
+            continue
+        latex += summary_metric_name
+        for metric_name in metric_names:
+            latex += " & " + str(summary_metric[metric_name])
+        latex += " \\\\\n"
+
+    return latex
+
+
 def pcap_extract(pcap_path, hosts):
     with PcapReader(tcpdump(pcap_path, args=["-w", "-", "-n", "tcp"], getfd=True)) as pcreader:
         for p in pcreader:
@@ -349,7 +393,7 @@ def split_data(data_in, data_out1, data_out2, ratio=None, exclude=None):
     joblib.dump(out2, data_out2)
 
 
-def match(data_in, fp_in, method_names, ip=None, force=False, binary=False, log_path=None, test=False):
+def match(data_in, fp_in, method_names, ip=None, force=False, binary=False, log_path=None, test=False, latex=False):
     data = load_data(data_in)
     fps = joblib.load(fp_in)
 
@@ -424,13 +468,16 @@ def match(data_in, fp_in, method_names, ip=None, force=False, binary=False, log_
 
                 end = time.time()
 
-                report = classification_report(y_true, y_pred, target_names=labels, zero_division=0, digits=5)
+                report = classification_report(y_true, y_pred, target_names=labels, zero_division=0, digits=5, output_dict=True if latex else False)
+                if latex:
+                    report = report_to_latex_table(report)
 
                 perf_text = " ----- Performance result -----\n"
                 perf_text += "Method: {}\n".format(method_name)
                 perf_text += "Config: " + ", ".join("{} = {}".format(k, v) for k, v in conf.items()) + "\n"
+                perf_text += "Classification report:\n"
                 perf_text += str(report) + "\n"
-                perf_text += "Confusion Matrix (x-axis: guess, y-axis: true)\n"
+                perf_text += "Confusion Matrix (x-axis: guess, y-axis: true):\n"
                 perf_text += "Labels: {}\n".format(labels)
                 perf_text += str(confusion_matrix(y_true, y_pred)) + "\n"
                 perf_text += "Took {} seconds to perform".format(end-start)
@@ -516,6 +563,7 @@ if __name__ == "__main__":
     parser_match.add_argument("--binary", help="Perform binary (benign/malicious) classification .", action="store_true", default=False)
     parser_match.add_argument("--log", help="The path to log the performance results.", type=str)
     parser_match.add_argument("--test", help="Test performance of the specified methods using different configs.", action="store_true", default=False)
+    parser_match.add_argument("--latex", help="We are lazy.", action="store_true", default=False)
 
     args = parser.parse_args()
 
@@ -529,4 +577,4 @@ if __name__ == "__main__":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
         match(args.data_in, args.fp_in, args.method, ip=args.host, force=args.force,
-              binary=args.binary, log_path=args.log, test=args.test)
+              binary=args.binary, log_path=args.log, test=args.test, latex=args.latex)
