@@ -28,6 +28,8 @@ def use_fingerprints(fp):
 
 def get_fingerprints(hosts):
     global jarm_label
+    label_occurence = {}
+
     for host in hosts.values():
         checked_ports = set()
         for label in host.labels:
@@ -48,11 +50,22 @@ def get_fingerprints(hosts):
             else:
                 jarm_label[jarm][label.label] = 1
 
+            if label.label in label_occurence:
+                label_occurence[label.label] += 1
+            else:
+                label_occurence[label.label] = 1
+
     for jarm in jarm_label:
         # get the most occuring label in each jarm hash
-        l = max(jarm_label[jarm].items(), key = lambda k: k[1])[0]
+        l = max(jarm_label[jarm].items(), key = lambda k: k[1] / label_occurence[k[0]])[0]
+        if len(jarm_label[jarm]) > 1:
+            for excluded_label in jarm_label[jarm].keys():
+                print("THIS JARM COLLIDES WITH ANOTHER C2 SIR!!!!!!!!", excluded_label)
         # convert to Label object since match function needs to return in that format
         jarm_label[jarm] = modules.label.Label("", l, None)
+
+    for jarm in jarm_label:
+        print(jarm, jarm_label[jarm].label)
 
     return jarm_label
 
