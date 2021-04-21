@@ -6,7 +6,7 @@ import tlsh
 import re
 from modules.protocol import identify_protocol
 
-word_reg = re.compile(b"[a-zA-Z0-9-_]{4,}")
+word_reg = re.compile(b"[a-zA-Z0-9_-]{4,}")
 
 class GenericPort(modules.port.Port):
     def __init__(self, port):
