@@ -507,6 +507,9 @@ def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, tes
                     print("")
                     print(perf_text)
 
+                if hasattr(method, "post_match"):
+                    method.post_match()
+
         # if two or more methods were used, print precision ranking
         if len(results) > 1:
             result_text = " ----- Best performing method/config -----\n"
