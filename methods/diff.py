@@ -12,14 +12,14 @@ import os
 import sys
 
 # maximum distance to a malicious host to alert being "similar"
-dist_threshold = 0.4
+dist_threshold = 0.1
 # compare only the c2 port against other hosts port
 # when it's set to true, the distance is based only on the c2 port distance
 focus_c2_ports = False
 # all ports in two hosts with same port number must be matched, the rest depends on `random_port_match`
 force_same_port_num = True
 # try all combination of ports from two hosts and bind the ports that gives lowest distance
-random_port_match = False
+random_port_match = True
 # two ports are considered totally different if the existence of tls doesn't match
 must_match_tls = True
 
@@ -446,39 +446,68 @@ def post_match():
 
         for label1, label2 in [(host1.label_str(), host2.label_str()), (host2.label_str(), host1.label_str())]:
             if label1 == "unlabeled":
-                # this comparison will be done when label1 is c2 label
-                continue
-            if label2 != "unlabeled" and label1 != label2:
-                # if both are c2, but not same label
-                label2_tmp = label2
+                if label2 == "unlabeled":
+                    continue
                 label2 = "C2"
 
             if label1 not in distances:
                 distances[label1] = {}
             if label2 not in distances[label1]:
                 distances[label1][label2] = []
-
             distances[label1][label2].append(dist)
+
+            if label1 != "unlabeled" and label2 != "unlabeled":
+                if "C2" not in distances:
+                    distances["C2"] = {}
+
+                if label1 != label2:
+                    # if both are c2, but not same label
+
+                    # distance from a specific c2 to another c2 family
+                    if "Other C2" not in distances[label1]:
+                        distances[label1]["Other C2"] = []
+                    distances[label1]["Other C2"].append(dist)
+
+                    # general distance from c2 to another c2 family
+                    if "Other C2" not in distances["C2"]:
+                        distances["C2"]["Other C2"] = []
+                    distances["C2"]["Other C2"].append(dist)
+                else:
+                    # distance to own c2 family
+                    if "self" not in distances["C2"]:
+                        distances["C2"]["self"] = []
+                    distances["C2"]["self"].append(dist)
 
             if label1 == label2:
                 # avoid counting same label twice
                 break
 
+    print(len(ip_distance_cache))
     for source_label, dists in distances.items():
-        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(5, 5))
-        data = pd.DataFrame(dict(
-            distance=distances[source_label][source_label] + distances[source_label]["unlabeled"],
-            label=[source_label] * len(distances[source_label][source_label]) + ["benign"] * len(distances[source_label]["unlabeled"]),
-            source=[source_label] *( len(distances[source_label][source_label]) + len(distances[source_label]["unlabeled"]))
-        ))
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 8))
+        dist_map = distances[source_label]
 
-        ax.violinplot([distances[source_label]["unlabeled"], distances[source_label][source_label]])
-        ax.set_title("{} distance".format(source_label))
+        if source_label == "unlabeled":
+            # the work for this is done when source_label is "C2"
+            continue
+
+        if source_label == "C2":
+            ax.violinplot([distances.get("unlabeled", {"C2": [1]})["C2"], dist_map["Other C2"], dist_map["self"]])
+            ax.set_xticklabels(["Benign", "C2 from other families", "C2 from same family"])
+            ax.set_xticks(range(1, 3+1))
+        else:
+            ax.violinplot([dist_map.get("unlabeled", [1]),
+                           dist_map["Other C2"],
+                           dist_map[source_label]])
+            ax.set_xticklabels(["Benign", "C2 from other families", source_label.capitalize()])
+            ax.set_xticks(range(1, 3+1))
+            #print("label {}: {} {} {}".format(source_label, len(dist_map["unlabeled"]), len(dist_map["Other C2"]), len(dist_map[source_label])))
+
+        ax.set_title("{} distance".format(source_label.capitalize()))
         ax.set_ylabel("Distance")
-        ax.set_xlabel("Occurence")
+        ax.set_xlabel("Label")
         ax.set_ylim([0, 1])
-        ax.set_xticks(range(1, 3))
-        ax.set_xticklabels(["benign", source_label])
+        plt.rcParams.update({'font.size': 14})
 
         os.makedirs("plots/{}_{}_{}".format(focus_c2_ports, force_same_port_num, random_port_match), exist_ok=True)
         plt.savefig("plots/{}_{}_{}/{}".format(focus_c2_ports, force_same_port_num, random_port_match, source_label))
