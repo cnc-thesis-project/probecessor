@@ -80,7 +80,7 @@ def _get_open_ports_vectors(*args):
     for host in args:
         open_ports_x = {}
         for port in host.ports.values():
-            open_ports_x[str(port.port)] = 1
+            open_ports_x[port.type + ":" + str(port.port)] = 1
         open_ports_X.append(open_ports_x)
     return _open_ports_hasher.transform(open_ports_X).toarray()
 
