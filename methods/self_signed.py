@@ -14,8 +14,14 @@ def use_config(config):
 	pass
 
 
+def use_fingerprints(fp):
+    pass
+
 def load_fingerprints(fp_path):
     pass
+
+def get_fingerprints(fp_path):
+    return True # doesn't matter what it returns as long as it's not empty
 
 # Returns the fingerprint match. If none match, return None.
 def match(host, force=False, test=False):
