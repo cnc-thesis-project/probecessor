@@ -1,5 +1,34 @@
 from methods.port_cluster.vectors import list_to_order_list, ListOrderVectorizer, construct_vector
-from methods.port_cluster.utils import cluster_module_data, match_module_clusters
+from sklearn.cluster import KMeans
+
+
+_NUM_CLUSTERS = 30
+
+_training_data = []
+_cls = None
+
+
+def add_data(ssh_port):
+    _training_data.append(construct_vector(_props_to_vectorizers, ssh_port))
+
+
+def train():
+    global _cls
+    _cls = KMeans(n_clusters=_NUM_CLUSTERS)
+    _cls.fit(_training_data)
+    return _cls
+
+
+def set_model(model):
+    global _cls
+    _cls = model
+
+
+def convert(ssh_port):
+    if _cls:
+        return _cls.predict([construct_vector(_props_to_vectorizers, ssh_port)])[0]
+    print("WARNING: NO MODEL FOR SSH")
+    return 1
 
 
 _encryption_algorithms = [
@@ -60,14 +89,3 @@ _props_to_vectorizers = {
     "ciphers:compression_algorithms_client_to_server": ListOrderVectorizer(_compression_algorithms),
     "ciphers:compression_algorithms_server_to_client": ListOrderVectorizer(_compression_algorithms),
 }
-
-
-def get_data(ssh_port):
-    data = {}
-
-    data["vector"] = construct_vector(_props_to_vectorizers, ssh_port)
-
-    return data
-
-
-match = match_module_clusters

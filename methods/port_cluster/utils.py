@@ -7,7 +7,7 @@ def cluster_module_data(mod_data):
         return
     model = methods.port_cluster.models.models.get(mod_data["module"])
     if not model:
-        print("WARNING: NO MODEL FOR {}".format(mod_data["module"]))
+        #print("WARNING: NO MODEL FOR {}".format(mod_data["module"]))
         return
     mod_data["cluster"] = model.predict([mod_data["vector"]])[0]
     #trns = model.transform([mod_data["vector"]])

@@ -1,4 +1,3 @@
-from sklearn.cluster import KMeans
 from sklearn.feature_extraction import FeatureHasher
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -77,74 +76,39 @@ def is_binary_classifier():
 
 def _get_open_ports_vectors(*args):
     open_ports_X = []
+    open_ports_y = []
     for host in args:
         open_ports_x = {}
         for port in host.ports.values():
-            open_ports_x[port.type + ":" + str(port.port)] = 1
+            open_ports_x[port.type + ":" + str(port.port)] = _get_module_handler(port.__class__.__name__).convert(port)
         open_ports_X.append(open_ports_x)
-    return _open_ports_hasher.transform(open_ports_X).toarray()
+        open_ports_y.append(host.label_str())
+    print("open_ports_X[0]:", open_ports_X[0])
+    return _open_ports_hasher.transform(open_ports_X).toarray(), open_ports_y
 
 
 def get_fingerprints(data):
-    fingerprints = {"ports": []}
-    module_X_map = {}
-    open_ports_X = _get_open_ports_vectors(*data.values())
+    fingerprints = {}
     open_ports_y = []
+    module_models = {}
 
+    # Train modules
     for host in data.values():
-        open_ports_x = {}
-        has_labeled_port = False
         for port in host.ports.values():
-            port_data = _convert_module(port)
-            port_data["ip"] = host.ip
-            port_module = port_data["module"]
-            port_vector = port_data.get("vector")
+            mod = _get_module_handler(port.__class__.__name__)
+            mod.add_data(port)
+    for mod_name, mod in _module_handlers.items():
+        module_models[mod_name] = mod.train()
 
-            if port_vector:
-                vectors = module_X_map.get(port_module)
-                if vectors is None:
-                    vectors = []
-                    module_X_map[port_module] = vectors
-                vectors.append(port_vector)
+    open_ports_X, open_ports_y = _get_open_ports_vectors(*data.values())
 
-            labels = host.get_port_label(port.port, False)
-            if len(labels):
-                port_data["labels"] = labels
-                # Only add the port to the fingerprint list if it is labeled.
-                fingerprints["ports"].append(port_data)
-
-        # TODO: we need multi-labels, not just a binary classification.
-        open_ports_y.append(host.label_str())
-
-    # Train cluster models
-    """
-    for m, X in module_X_map.items():
-        print("Training port model for {} ...".format(m))
-        if len(X) == 0:
-            print("error: len(X) == 0")
-            continue
-
-        X = np.array(X)
-        clt = KMeans(n_clusters=NUM_CLUSTERS)
-        clt.fit(X)
-
-        methods.port_cluster.models.models[m] = clt
-    """
-
-
-    for port_data in fingerprints["ports"]:
-        if port_data.get("vector"):
-            cluster_module_data(port_data)
-
-
-    # Train open ports model
+    # Train ports model
     print("Training open ports classifier ...")
     cls = RandomForestClassifier()
     cls.fit(open_ports_X, open_ports_y)
 
-
-    fingerprints["module_models"] = methods.port_cluster.models.models
     fingerprints["open_ports_model"] = cls
+    fingerprints["module_models"] = module_models
 
     return fingerprints
 
@@ -152,9 +116,14 @@ def get_fingerprints(data):
 def use_fingerprints(fp):
     global _fingerprints
     _fingerprints = fp
+    for mod_name, mod in _module_handlers.items():
+        model = fp["module_models"].get(mod_name)
+        if model:
+            mod.set_model(model)
+        else:
+            print("WARNING: NO MODEL IN FINGERPRINT FILE MATCHING MODULE '{}'".format(mod_name))
     #print("Loaded {} port fingerprints".format(len(_fingerprints["ports"])))
     #print("Loaded models:", _fingerprints.get("module_models"))
-    methods.port_cluster.models.models = _fingerprints["module_models"]
 
 
 def _match_mod_data(mod_data1, mod_data2):
@@ -181,12 +150,14 @@ def _match_port_data(port_data1, port_data2):
 def match(host, force=False, test=False):
     labels_matched = {}
 
-    open_ports_x = _get_open_ports_vectors(host)
+    open_ports_x,_ = _get_open_ports_vectors(host)
     if _fingerprints["open_ports_model"].predict(open_ports_x)[0] == host.label_str():
         return (host, host.labels)
     else:
         return (host, [])
 
+    # TODO: the below is not currently used for anything. Should perhaps be removed in the future.
+    """
     for port in host.ports.values():
         port_data = _convert_module(port)
 
@@ -213,3 +184,4 @@ def match(host, force=False, test=False):
             labels = l["labels"]
 
     return (host, labels)
+    """
