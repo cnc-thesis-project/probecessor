@@ -395,7 +395,7 @@ def split_data(data_in, data_out1, data_out2, ratio=None, exclude=None):
     joblib.dump(out2, data_out2)
 
 
-def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False, latex=False):
+def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False, print_matches=True, print_report=False, latex=False):
     data = load_data(data_in)
     fps = joblib.load(fp_in)
 
@@ -461,6 +461,8 @@ def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, tes
                     if match_labels not in labels:
                         labels.append(match_labels)
 
+                    if match_labels != "unlabeled" and print_matches:
+                        print("\x1b[2K\r{}: {}".format(host.ip, match_labels))
                     y_true.append(labels.index(host_labels))
                     y_pred.append(labels.index(match_labels))
 
@@ -469,30 +471,31 @@ def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, tes
 
                 end = time.time()
 
-                report = classification_report(y_true, y_pred, target_names=labels, zero_division=0, digits=5, output_dict=True if latex else False)
-                if latex:
-                    report = report_to_latex_table(report)
+                if print_report:
+                    report = classification_report(y_true, y_pred, target_names=labels, zero_division=0, digits=5, output_dict=True if latex else False)
+                    if latex:
+                        report = report_to_latex_table(report)
 
-                perf_text = " ----- Performance result -----\n"
-                perf_text += "Method: {}\n".format(method_name)
-                perf_text += "Config: " + ", ".join("{} = {}".format(k, v) for k, v in conf.items()) + "\n"
-                perf_text += "Classification report:\n"
-                perf_text += str(report) + "\n"
-                perf_text += "Confusion Matrix (x-axis: guess, y-axis: true):\n"
-                perf_text += "Labels: {}\n".format(labels)
-                perf_text += str(confusion_matrix(y_true, y_pred)) + "\n"
-                perf_text += "Took {} seconds to perform".format(end-start)
-                perf_text += "\n\n"
+                    perf_text = " ----- Performance result -----\n"
+                    perf_text += "Method: {}\n".format(method_name)
+                    perf_text += "Config: " + ", ".join("{} = {}".format(k, v) for k, v in conf.items()) + "\n"
+                    perf_text += "Classification report:\n"
+                    perf_text += str(report) + "\n"
+                    perf_text += "Confusion Matrix (x-axis: guess, y-axis: true):\n"
+                    perf_text += "Labels: {}\n".format(labels)
+                    perf_text += str(confusion_matrix(y_true, y_pred)) + "\n"
+                    perf_text += "Took {} seconds to perform".format(end-start)
+                    perf_text += "\n\n"
 
-                precision = precision_score(y_true, y_pred, average="micro")
-                results.append({"method": method_name, "config": conf, "precision": precision})
+                    precision = precision_score(y_true, y_pred, average="micro")
+                    results.append({"method": method_name, "config": conf, "precision": precision})
 
-                if log_path:
-                    log_file.write(perf_text)
-                    log_file.flush()
+                    if log_path:
+                        log_file.write(perf_text)
+                        log_file.flush()
 
-                print("")
-                print(perf_text)
+                    print("")
+                    print(perf_text)
 
         # if two or more methods were used, print precision ranking
         if len(results) > 1:
@@ -565,6 +568,8 @@ if __name__ == "__main__":
     parser_match.add_argument("--log", help="The path to log the performance results.", type=str)
     parser_match.add_argument("--test", help="Test performance of the specified methods using different configs.", action="store_true", default=False)
     parser_match.add_argument("--latex", help="We are lazy.", action="store_true", default=False)
+    parser_match.add_argument("--print-matches", help="Whether to print the hosts as they are matched.", action="store_true", default=True)
+    parser_match.add_argument("--print-report", help="Whether to print the classification report. Only reasonable if matching against labeled data.", action="store_true", default=False)
 
     args = parser.parse_args()
 
@@ -578,4 +583,4 @@ if __name__ == "__main__":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
         match(args.data_in, args.fp_in, ip=args.host, force=args.force,
-                binary=args.binary, log_path=args.log, test=args.test, latex=args.latex)
+                binary=args.binary, log_path=args.log, test=args.test, print_matches=args.print_matches, print_report=args.print_report, latex=args.latex)

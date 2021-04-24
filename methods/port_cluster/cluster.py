@@ -106,5 +106,4 @@ def match(host, force=False, test=False):
     labels_matched = {}
 
     open_ports_x,_ = _get_open_ports_vectors(host)
-    print("prediction:", _fingerprints["open_ports_model"].predict(open_ports_x)[0])
     return (host, [Label("", _fingerprints["open_ports_model"].predict(open_ports_x)[0], 0)])
