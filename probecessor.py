@@ -168,7 +168,7 @@ def database_extract(output, database, label_path, pcap_path, keep):
                         tls_map[ip] = {}
                     port_obj = tls_map[ip].get(port)
                     if not port_obj:
-                        port_obj = modules.get_port("tls")
+                        port_obj = modules.get_port("tls", port)
                         tls_map[ip][port] = port_obj
                 else:
                     port_obj = host_map[ip].ports.get(port)
@@ -275,27 +275,28 @@ def fingerprint(fp_out, data_in, method_names):
     method_fingerprints = {"method_fingerprints": {}}
     method_names = sorted(method_names)
     for method_name in method_names:
-        method_func = methods.methods.get(method_name)
-        if method_func:
-            method_fingerprints["method_fingerprints"][method_name] = method_func.get_fingerprints(data)
-            print("Saved {} fingerprints for {} method".format(len(data), method_name))
+        method = methods.methods.get(method_name)
+        if method:
+            method_fingerprints["method_fingerprints"][method_name] = method.get_fingerprints(data)
         else:
             print("Error: method {} not found".format(method_name))
             sys.exit(1)
+        method.use_fingerprints(method_fingerprints["method_fingerprints"][method_name])
 
     rf = RandomForestClassifier(n_estimators=750)
     X = []
     y = []
 
+    print("Matching training data ...")
     print_progress(0, len(data))
     i = 0
     for host in data.values():
         i += 1
         x = []
         for method_name in method_names:
-            method_func = methods.methods.get(method_name)
-            method_func.use_fingerprints(method_fingerprints["method_fingerprints"][method_name])
-            _, labels = method_func.match(host)
+            method = methods.methods.get(method_name)
+            method.use_fingerprints(method_fingerprints["method_fingerprints"][method_name])
+            _, labels = method.match(host)
             x.append(Label.to_str(labels))
         X.append(x)
         y.append(host.label_str())

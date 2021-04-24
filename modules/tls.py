@@ -7,10 +7,11 @@ from OpenSSL import crypto
 import modules.module
 
 
-class TlsPort(modules.module.Module):
-    def __init__(self):
-        super().__init__("tls")
+class TlsPort(modules.port.Port):
+    def __init__(self, port):
+        super().__init__("tls", port)
         self.data = {}
+
 
     def add_data(self, row):
         if row["type"] == "certificate":

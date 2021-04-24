@@ -11,4 +11,4 @@ def set_model(model):
 
 
 def convert(tls_port):
-    return 1
+    return -1 if tls_port.get_property("self_signed") == "no" else 1
