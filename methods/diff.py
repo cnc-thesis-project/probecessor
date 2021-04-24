@@ -13,6 +13,11 @@ import sys
 
 # maximum distance to a malicious host to alert being "similar"
 dist_threshold = 0.1
+
+# port pairing method
+port_pairing = "lenient"
+port_pairing_list = ["lenient", "strict", "exact"]
+
 # compare only the c2 port against other hosts port
 # when it's set to true, the distance is based only on the c2 port distance
 focus_c2_ports = False
@@ -33,43 +38,49 @@ def is_binary_classifier():
 
 def get_default_config():
     return {"dist_threshold": dist_threshold, "focus_c2_ports": focus_c2_ports,
-            "force_same_port_num": force_same_port_num, "random_port_match": random_port_match}
+            "port_pairing": port_pairing}
 
 def get_configs():
     global plot
     plot = True
-    for threshold in range(20, 51, 1): # 0.20 - 0.50
+    for threshold in range(0, 100, 1):
         yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
-               "force_same_port_num": True, "random_port_match": False}
-        if plot:
-            break
+               "port_pairing": "exact"}
     plot = True
-    for threshold in range(20, 51, 1): # 0.20 - 0.50
+    for threshold in range(0, 100, 1):
         yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
-               "force_same_port_num": True, "random_port_match": True}
-        if plot:
-            break
+               "port_pairing": "strict"}
     plot = True
-    for threshold in range(20, 51, 1): # 0.20 - 0.50
+    for threshold in range(0, 100, 1):
         yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
-               "force_same_port_num": False, "random_port_match": True}
-        if plot:
-            break
+               "port_pairing": "lenient"}
 
 
 def use_config(config):
     global dist_threshold, ip_distance_cache
-    global focus_c2_ports, force_same_port_num, random_port_match
+    global port_pairing, focus_c2_ports, force_same_port_num, random_port_match
 
-    if focus_c2_ports != config["focus_c2_ports"] or force_same_port_num != config["force_same_port_num"] or \
-            random_port_match != config["random_port_match"]:
+    if port_pairing != config["port_pairing"]:
         ip_distance_cache.clear()
 
-    dist_threshold = config["dist_threshold"]
+    port_pairing = config["port_pairing"]
 
+    if port_pairing not in port_pairing_list:
+        print("Error: port pairing method '{}' not found".format(port_pairing))
+        sys.exit(1)
+
+    if port_pairing == "lenient":
+        force_same_port_num = False
+        random_port_match = True
+    elif port_pairing == "strict":
+        force_same_port_num = True
+        random_port_match = True
+    else:
+        force_same_port_num = True
+        random_port_match = False
+
+    dist_threshold = config["dist_threshold"]
     focus_c2_ports = config["focus_c2_ports"]
-    force_same_port_num = config["force_same_port_num"]
-    random_port_match = config["random_port_match"]
 
     if force_same_port_num == False and random_port_match == False:
         print("Error: force_same_port_num and random_port_match cannot be set to False together")
