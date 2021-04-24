@@ -281,54 +281,6 @@ def fingerprint(fp_out, data_in, method_names):
         else:
             print("Error: method {} not found".format(method_name))
             sys.exit(1)
-        method.use_fingerprints(method_fingerprints["method_fingerprints"][method_name])
-
-    rf = RandomForestClassifier(n_estimators=750)
-    X = []
-    y = []
-
-    print("Matching training data ...")
-    print_progress(0, len(data))
-    i = 0
-    for host in data.values():
-        i += 1
-        x = []
-        for method_name in method_names:
-            method = methods.methods.get(method_name)
-            method.use_fingerprints(method_fingerprints["method_fingerprints"][method_name])
-            _, labels = method.match(host)
-            x.append(Label.to_str(labels))
-        X.append(x)
-        y.append(host.label_str())
-        print_progress(i, len(data))
-    print("")
-
-    highest_lid = 0
-    label_id_map = {}
-    # convert labels to numbers
-    for x in X:
-        for i in range(len(x)):
-            l = x[i]
-            if l not in label_id_map:
-                label_id_map[l] = highest_lid
-                highest_lid += 1
-            lid = label_id_map[l]
-            x[i] = lid
-
-    for i in range(len(y)):
-        # TODO: remove code duplication below
-        l = y[i]
-        if l not in label_id_map:
-            label_id_map[l] = highest_lid
-            highest_lid += 1
-        lid = label_id_map[l]
-        y[i] = lid
-
-    print("Training method model ...")
-    rf.fit(X, y)
-
-    method_fingerprints["_method_model"] = rf
-    method_fingerprints["_label_id_map"] = label_id_map
 
     joblib.dump(method_fingerprints, fp_out)
     print("Saved fingerprints to '{}'".format(fp_out))
@@ -443,64 +395,11 @@ def split_data(data_in, data_out1, data_out2, ratio=None, exclude=None):
     joblib.dump(out2, data_out2)
 
 
-def match2(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False):
-    data = load_data(data_in)
-    fps = joblib.load(fp_in)
-
-    method_names = list(fps["method_fingerprints"].keys())
-
-    for method_name in method_names:
-        method = methods.methods.get(method_name)
-        if not method:
-            print("Error: Invalid method '{}' in fingerprint file".format(method_name))
-            sys.exit(1)
-        method.use_fingerprints(fps["method_fingerprints"][method_name])
-
-    print("Matching ...")
-
-    rf = fps["_method_model"]
-    label_id_map = fps["_label_id_map"]
-    id_label_map = {v: k for k, v in label_id_map.items()}
-    id_label_list = [-1]*len(id_label_map)
-    for k, v in id_label_map.items():
-        id_label_list[k] = v
-
-    X = []
-    y_true = []
-
-    print_progress(0, len(data))
-    i = 0
-    for host in data.values():
-        x = []
-        for method_name in method_names:
-            method = methods.methods.get(method_name)
-
-            _, labels = method.match(host, force=force, test=test)
-            lstr = Label.to_str(labels)
-            lid = label_id_map.get(lstr, -1)
-            x.append(lid)
-
-        X.append(x)
-        y_true.append(label_id_map.get(host.label_str(), -1))
-
-        i += 1
-        print_progress(i, len(data))
-    print("")
-
-    print("Predicting methods ...")
-    y_pred = rf.predict(X)
-
-    report = classification_report(y_true, y_pred, labels=list(sorted(id_label_map.keys())), target_names=id_label_list, zero_division=0, digits=5)
-
-    print(report)
-
-
-
 def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False, latex=False):
     data = load_data(data_in)
     fps = joblib.load(fp_in)
 
-    method_names = list(fps.keys())
+    method_names = list(fps["method_fingerprints"].keys())
 
     print("Matching ...")
 
@@ -514,11 +413,11 @@ def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, tes
             if not methods.methods.get(method_name):
                 print("Warning: no such method '{}'".format(method_name))
                 continue
-            if not fps.get(method_name):
+            if not fps["method_fingerprints"].get(method_name):
                 print("Warning: the fingerprint file does not contain a fingerprint for method '{}'".format(method_name))
                 continue
             method = methods.methods[method_name]
-            method.use_fingerprints(fps[method_name])
+            method.use_fingerprints(fps["method_fingerprints"][method_name])
             if test:
                 configs = method.get_configs()
             else:
@@ -674,12 +573,9 @@ if __name__ == "__main__":
     elif args.subcommand == "print":
         print_hosts(args.data_in, args.method, args.host, args.label)
     elif args.subcommand == "split":
-            split_data(args.data_in, args.data_out1, args.data_out2, ratio=args.ratio, exclude=args.exclude)
+        split_data(args.data_in, args.data_out1, args.data_out2, ratio=args.ratio, exclude=args.exclude)
     elif args.subcommand == "fingerprint":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
-        #match(args.data_in, args.fp_in, args.method, ip=args.host, force=args.force,
-        #      binary=args.binary, log_path=args.log, test=args.test, latex=args.latex)
-        #TODO: fix match instead of using match2
-        match2(args.data_in, args.fp_in, ip=args.host, force=args.force,
-              binary=args.binary, log_path=args.log, test=args.test)
+        match(args.data_in, args.fp_in, ip=args.host, force=args.force,
+                binary=args.binary, log_path=args.log, test=args.test, latex=args.latex)
