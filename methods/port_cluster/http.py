@@ -38,9 +38,9 @@ def train():
 
 def convert(http_port):
     if _cls:
-        return _cls.predict([construct_vector(_props_to_vectorizers, http_port)])[0]
+        return {"http:{}".format(http_port.port): _cls.predict([construct_vector(_props_to_vectorizers, http_port)])[0]}
     print("WARNING: NO MODEL FOR HTTP")
-    return 1
+    return {"http:{}".format(http_port.port): -1}
 
 
 _request_types = [

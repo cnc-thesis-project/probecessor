@@ -442,7 +442,7 @@ def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, tes
                     # which won't work with multiprocessing
                     match_map = map(functools.partial(method.match, force=force, test=test), data.values())
                 else:
-                    pool = multiprocessing.Pool(1)
+                    pool = multiprocessing.Pool(4)
                     match_map = pool.imap_unordered(functools.partial(method.match, force=force, test=test), data.values())
 
                 for host, matches in match_map:

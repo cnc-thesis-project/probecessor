@@ -23,9 +23,14 @@ class TlsPort(modules.port.Port):
             issuer = openssl_cert.get_issuer().get_components()
             self.data["subject"] = b"".join(b"/" + name + b"=" + value for name, value in subject)
             self.data["issuer"] = b"".join(b"/" + name + b"=" + value for name, value in issuer)
-            self.data["sign_alg"] = cert.signature_algorithm_oid._name
-            self.data["hash_alg"] = cert.signature_hash_algorithm.name
-            self.data["key_size"] = cert.public_key().key_size
+            if cert.signature_algorithm_oid:
+                self.data["sign_alg"] = cert.signature_algorithm_oid._name
+            if cert.signature_hash_algorithm:
+                self.data["hash_alg"] = cert.signature_hash_algorithm.name
+            if cert.public_key().__class__.__name__ == "_Ed25519PublicKey":
+                self.data["key_size"] = 256
+            else:
+                self.data["key_size"] = cert.public_key().key_size
             self.data["key_sha256"] = cert.fingerprint(hashes.SHA256()).hex()
             self.data["self_issued"] = self.data["subject"] == self.data["issuer"]
             try:
