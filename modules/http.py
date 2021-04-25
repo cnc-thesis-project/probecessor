@@ -145,7 +145,10 @@ def process_probe(row):
 
     try:
         # TODO: IIS server is dick and may return decimals in status_code :shrug:
-        data["{}:status_code".format(probe_type)] = float(status_code)
+        try:
+            data["{}:status_code".format(probe_type)] = float(status_code)
+        except ValueError:
+            data["{}:status_code".format(probe_type)] = -1
     except TypeError:
         data["{}:status_code".format(probe_type)] = None
     try:

@@ -1,12 +1,16 @@
-import tlsh
+def add_data(mod):
+    pass
 
-def get_data(mod):
-    return {"tlsh": mod.get_property("tlsh"), "port": mod.port}
 
-def match(mod_data1, mod_data2):
-    try:
-        diff = tlsh.diff(mod_data1["tlsh"], mod_data2["tlsh"])
-    except:
-        return False
-    #print("TLSH diff between {} and {}:".format(mod_data1["port"], mod_data2["port"]), diff)
-    return diff < 50
+def train(mods):
+    pass
+
+
+def set_model(model):
+    pass
+
+
+def convert(port):
+    data_len = port.get_property("data")
+    ret = { "{}:{}".format(port.type, port.port): 1 if data_len == 0 else -1 }
+    return ret

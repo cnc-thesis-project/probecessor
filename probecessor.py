@@ -15,6 +15,7 @@ import joblib
 import math
 import time
 from sklearn.metrics import classification_report, confusion_matrix, precision_score
+from sklearn.ensemble import RandomForestClassifier
 import multiprocessing
 import functools
 
@@ -167,7 +168,7 @@ def database_extract(output, database, label_path, pcap_path, keep):
                         tls_map[ip] = {}
                     port_obj = tls_map[ip].get(port)
                     if not port_obj:
-                        port_obj = modules.get_port("tls")
+                        port_obj = modules.get_port("tls", port)
                         tls_map[ip][port] = port_obj
                 else:
                     port_obj = host_map[ip].ports.get(port)
@@ -271,17 +272,18 @@ def fingerprint(fp_out, data_in, method_names):
 
     print("Fingerprinting ...")
 
-    method_fingerprints = {}
+    method_fingerprints = {"method_fingerprints": {}}
+    method_names = sorted(method_names)
     for method_name in method_names:
-        method_func = methods.methods.get(method_name)
-        if method_func:
-            method_fingerprints[method_name] = method_func.get_fingerprints(data)
-            print("Saved {} fingerprints for {} method".format(len(data), method_name))
+        method = methods.methods.get(method_name)
+        if method:
+            method_fingerprints["method_fingerprints"][method_name] = method.get_fingerprints(data)
         else:
             print("Error: method {} not found".format(method_name))
             sys.exit(1)
 
     joblib.dump(method_fingerprints, fp_out)
+    print("Saved fingerprints to '{}'".format(fp_out))
 
 
 def print_hosts(data_in, method, ip=None, label=None):
@@ -393,12 +395,11 @@ def split_data(data_in, data_out1, data_out2, ratio=None, exclude=None):
     joblib.dump(out2, data_out2)
 
 
-def match(data_in, fp_in, method_names, ip=None, force=False, binary=False, log_path=None, test=False, latex=False):
+def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False, print_report=False, latex=False):
     data = load_data(data_in)
     fps = joblib.load(fp_in)
 
-    if not method_names:
-        method_names = list(fps.keys())
+    method_names = list(fps["method_fingerprints"].keys())
 
     print("Matching ...")
 
@@ -412,11 +413,11 @@ def match(data_in, fp_in, method_names, ip=None, force=False, binary=False, log_
             if not methods.methods.get(method_name):
                 print("Warning: no such method '{}'".format(method_name))
                 continue
-            if not fps.get(method_name):
+            if not fps["method_fingerprints"].get(method_name):
                 print("Warning: the fingerprint file does not contain a fingerprint for method '{}'".format(method_name))
                 continue
             method = methods.methods[method_name]
-            method.use_fingerprints(fps[method_name])
+            method.use_fingerprints(fps["method_fingerprints"][method_name])
             if test:
                 configs = method.get_configs()
             else:
@@ -434,19 +435,29 @@ def match(data_in, fp_in, method_names, ip=None, force=False, binary=False, log_
                 y_pred = []
                 labels = []
                 print_progress(0, len(data))
-                count = 0
 
                 if test:
                     # cannot use pool in test because diff method needs to cache results
                     # which won't work with multiprocessing
                     match_map = map(functools.partial(method.match, force=force, test=test), data.values())
                 else:
-                    pool = multiprocessing.Pool(1)
+                    pool = multiprocessing.Pool(4)
                     match_map = pool.imap_unordered(functools.partial(method.match, force=force, test=test), data.values())
 
+                count = 0
+                last_count = 0
+                time_window_start = time.time()
+                time_left=None
                 for host, matches in match_map:
+                    if count > 0:
+                        if time.time() - time_window_start > 2:
+                            elapsed = time.time() - time_window_start
+                            avg_host_time = elapsed/(count-last_count)
+                            time_left = int(avg_host_time*(len(data)-count))
+                            last_count = count
+                            time_window_start = time.time()
                     count += 1
-                    print_progress(count, len(data))
+                    print_progress(count, len(data), estimated_time=time_left)
 
                     host_labels = host.label_str()
                     if (method.is_binary_classifier() or binary) and host_labels != "unlabeled":
@@ -460,6 +471,8 @@ def match(data_in, fp_in, method_names, ip=None, force=False, binary=False, log_
                     if match_labels not in labels:
                         labels.append(match_labels)
 
+                    if match_labels != "unlabeled" and not print_report:
+                        print("\x1b[2K\r{}: {}".format(host.ip, match_labels))
                     y_true.append(labels.index(host_labels))
                     y_pred.append(labels.index(match_labels))
 
@@ -468,30 +481,31 @@ def match(data_in, fp_in, method_names, ip=None, force=False, binary=False, log_
 
                 end = time.time()
 
-                report = classification_report(y_true, y_pred, target_names=labels, zero_division=0, digits=5, output_dict=True if latex else False)
-                if latex:
-                    report = report_to_latex_table(report)
+                if print_report:
+                    report = classification_report(y_true, y_pred, target_names=labels, zero_division=0, digits=5, output_dict=True if latex else False)
+                    if latex:
+                        report = report_to_latex_table(report)
 
-                perf_text = " ----- Performance result -----\n"
-                perf_text += "Method: {}\n".format(method_name)
-                perf_text += "Config: " + ", ".join("{} = {}".format(k, v) for k, v in conf.items()) + "\n"
-                perf_text += "Classification report:\n"
-                perf_text += str(report) + "\n"
-                perf_text += "Confusion Matrix (x-axis: guess, y-axis: true):\n"
-                perf_text += "Labels: {}\n".format(labels)
-                perf_text += str(confusion_matrix(y_true, y_pred)) + "\n"
-                perf_text += "Took {} seconds to perform".format(end-start)
-                perf_text += "\n\n"
+                    perf_text = " ----- Performance result -----\n"
+                    perf_text += "Method: {}\n".format(method_name)
+                    perf_text += "Config: " + ", ".join("{} = {}".format(k, v) for k, v in conf.items()) + "\n"
+                    perf_text += "Classification report:\n"
+                    perf_text += str(report) + "\n"
+                    perf_text += "Confusion Matrix (x-axis: guess, y-axis: true):\n"
+                    perf_text += "Labels: {}\n".format(labels)
+                    perf_text += str(confusion_matrix(y_true, y_pred)) + "\n"
+                    perf_text += "Took {} seconds to perform".format(end-start)
+                    perf_text += "\n\n"
 
-                precision = precision_score(y_true, y_pred, average="micro")
-                results.append({"method": method_name, "config": conf, "precision": precision})
+                    precision = precision_score(y_true, y_pred, average="micro")
+                    results.append({"method": method_name, "config": conf, "precision": precision})
 
-                if log_path:
-                    log_file.write(perf_text)
-                    log_file.flush()
+                    if log_path:
+                        log_file.write(perf_text)
+                        log_file.flush()
 
-                print("")
-                print(perf_text)
+                    print("")
+                    print(perf_text)
 
         # if two or more methods were used, print precision ranking
         if len(results) > 1:
@@ -564,6 +578,7 @@ if __name__ == "__main__":
     parser_match.add_argument("--log", help="The path to log the performance results.", type=str)
     parser_match.add_argument("--test", help="Test performance of the specified methods using different configs.", action="store_true", default=False)
     parser_match.add_argument("--latex", help="We are lazy.", action="store_true", default=False)
+    parser_match.add_argument("--print-report", help="Whether to print the classification report. Only reasonable if matching against labeled data.", action="store_true", default=False)
 
     args = parser.parse_args()
 
@@ -572,9 +587,9 @@ if __name__ == "__main__":
     elif args.subcommand == "print":
         print_hosts(args.data_in, args.method, args.host, args.label)
     elif args.subcommand == "split":
-            split_data(args.data_in, args.data_out1, args.data_out2, ratio=args.ratio, exclude=args.exclude)
+        split_data(args.data_in, args.data_out1, args.data_out2, ratio=args.ratio, exclude=args.exclude)
     elif args.subcommand == "fingerprint":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
-        match(args.data_in, args.fp_in, args.method, ip=args.host, force=args.force,
-              binary=args.binary, log_path=args.log, test=args.test, latex=args.latex)
+        match(args.data_in, args.fp_in, ip=args.host, force=args.force,
+                binary=args.binary, log_path=args.log, test=args.test, print_report=args.print_report, latex=args.latex)
