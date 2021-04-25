@@ -12,10 +12,10 @@ import os
 import sys
 
 # maximum distance to a malicious host to alert being "similar"
-dist_threshold = 0.1
+dist_threshold = 1
 
 # port pairing method
-port_pairing = "lenient"
+port_pairing = "exact"
 port_pairing_list = ["lenient", "strict", "exact"]
 
 # compare only the c2 port against other hosts port
@@ -430,7 +430,7 @@ def match(host, force=False, test=False):
     if len(ip_distances) == 0:
         return (host, [])
 
-    ip_distances = sorted(ip_distances, key=lambda x: x[0])
+    ip_distances = sorted(ip_distances, key=lambda x: (x[0], x[1].label_str() != "unlabeled"))
 
     _, closest = ip_distances[0]
     if verbose:
@@ -493,7 +493,6 @@ def post_match():
                 # avoid counting same label twice
                 break
 
-    print(len(ip_distance_cache))
     for source_label, dists in distances.items():
         fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 8))
         dist_map = distances[source_label]
