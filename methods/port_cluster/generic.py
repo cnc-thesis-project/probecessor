@@ -11,4 +11,6 @@ def set_model(model):
 
 
 def convert(port):
-    return { "{}:{}".format(port.type, port.port): 1 }
+    data_len = port.get_property("data")
+    ret = { "{}:{}".format(port.type, port.port): 1 if data_len == 0 else -1 }
+    return ret

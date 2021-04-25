@@ -26,7 +26,9 @@ def set_model(model):
 
 def convert(ssh_port):
     if _cls:
-        return {"ssh:{}".format(ssh_port.port): _cls.predict([construct_vector(_props_to_vectorizers, ssh_port)])[0]}
+        pred = _cls.predict([construct_vector(_props_to_vectorizers, ssh_port)])[0]
+        pred += 1
+        return {"ssh:{}".format(ssh_port.port): pred}
     print("WARNING: NO MODEL FOR SSH")
     return {"ssh:{}".format(ssh_port.port): -1}
 

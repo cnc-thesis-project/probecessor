@@ -1,6 +1,5 @@
 from sklearn.feature_extraction import FeatureHasher
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import DecisionTreeClassifier
 
 from modules.label import Label
 import numpy as np
@@ -17,6 +16,12 @@ import methods.port_cluster.http
 import methods.port_cluster.ssh
 import methods.port_cluster.generic
 import methods.port_cluster.tls
+
+
+# Whether to disregard all advanced features and only classify based on the list of open ports.
+# Changing this requires retraining.
+# TODO: make shit like this configurable >:(
+_SIMPLE_CLASSIFY = False
 
 
 _module_handlers = {
@@ -59,11 +64,19 @@ def _get_open_ports_vectors(*args):
     for host in args:
         open_ports_x = {}
         for port in host.ports.values():
-            if port.tls:
-                open_ports_x.update(_get_module_handler(port.tls).convert(port.tls))
-            open_ports_x.update(_get_module_handler(port).convert(port))
+            if not _SIMPLE_CLASSIFY:
+                if port.tls:
+                    open_ports_x.update(_get_module_handler(port.tls).convert(port.tls))
+                open_ports_x.update(_get_module_handler(port).convert(port))
+            else:
+                open_ports_x[str(port.port)] = 1
         X.append(open_ports_x)
         y.append(host.label_str())
+    for vec in X:
+        for key, x in vec.items():
+            if x == 0:
+                print("WARNING: ZERO VALUE IN {}={}", key, x)
+                sys.exit(1)
     return _open_ports_hasher.transform(X).toarray(), y
 
 
@@ -72,18 +85,19 @@ def get_fingerprints(data):
     module_models = {}
 
     # Train modules
-    for host in data.values():
-        for port in host.ports.values():
-            mod = _get_module_handler(port)
-            mod.add_data(port)
-    for mod_name, mod in _module_handlers.items():
-        module_models[mod_name] = mod.train()
+    if not _SIMPLE_CLASSIFY:
+        for host in data.values():
+            for port in host.ports.values():
+                mod = _get_module_handler(port)
+                mod.add_data(port)
+        for mod_name, mod in _module_handlers.items():
+            module_models[mod_name] = mod.train()
 
     X, y = _get_open_ports_vectors(*data.values())
 
     # Train ports model
     print("Training open ports classifier ...")
-    cls = RandomForestClassifier()
+    cls = RandomForestClassifier(max_features="sqrt", n_estimators=400, min_samples_leaf=1)
     cls.fit(X, y)
 
     fingerprints["open_ports_model"] = cls

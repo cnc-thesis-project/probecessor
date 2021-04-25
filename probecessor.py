@@ -395,7 +395,7 @@ def split_data(data_in, data_out1, data_out2, ratio=None, exclude=None):
     joblib.dump(out2, data_out2)
 
 
-def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False, print_matches=True, print_report=False, latex=False):
+def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, test=False, print_report=False, latex=False):
     data = load_data(data_in)
     fps = joblib.load(fp_in)
 
@@ -435,7 +435,6 @@ def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, tes
                 y_pred = []
                 labels = []
                 print_progress(0, len(data))
-                count = 0
 
                 if test:
                     # cannot use pool in test because diff method needs to cache results
@@ -445,9 +444,20 @@ def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, tes
                     pool = multiprocessing.Pool(4)
                     match_map = pool.imap_unordered(functools.partial(method.match, force=force, test=test), data.values())
 
+                count = 0
+                last_count = 0
+                time_window_start = time.time()
+                time_left=None
                 for host, matches in match_map:
+                    if count > 0:
+                        if time.time() - time_window_start > 2:
+                            elapsed = time.time() - time_window_start
+                            avg_host_time = elapsed/(count-last_count)
+                            time_left = int(avg_host_time*(len(data)-count))
+                            last_count = count
+                            time_window_start = time.time()
                     count += 1
-                    print_progress(count, len(data))
+                    print_progress(count, len(data), estimated_time=time_left)
 
                     host_labels = host.label_str()
                     if (method.is_binary_classifier() or binary) and host_labels != "unlabeled":
@@ -461,7 +471,7 @@ def match(data_in, fp_in, ip=None, force=False, binary=False, log_path=None, tes
                     if match_labels not in labels:
                         labels.append(match_labels)
 
-                    if match_labels != "unlabeled" and print_matches:
+                    if match_labels != "unlabeled" and not print_report:
                         print("\x1b[2K\r{}: {}".format(host.ip, match_labels))
                     y_true.append(labels.index(host_labels))
                     y_pred.append(labels.index(match_labels))
@@ -568,7 +578,6 @@ if __name__ == "__main__":
     parser_match.add_argument("--log", help="The path to log the performance results.", type=str)
     parser_match.add_argument("--test", help="Test performance of the specified methods using different configs.", action="store_true", default=False)
     parser_match.add_argument("--latex", help="We are lazy.", action="store_true", default=False)
-    parser_match.add_argument("--print-matches", help="Whether to print the hosts as they are matched.", action="store_true", default=True)
     parser_match.add_argument("--print-report", help="Whether to print the classification report. Only reasonable if matching against labeled data.", action="store_true", default=False)
 
     args = parser.parse_args()
@@ -583,4 +592,4 @@ if __name__ == "__main__":
         fingerprint(args.fp_out, args.data_in, args.method)
     elif args.subcommand == "match":
         match(args.data_in, args.fp_in, ip=args.host, force=args.force,
-                binary=args.binary, log_path=args.log, test=args.test, print_matches=args.print_matches, print_report=args.print_report, latex=args.latex)
+                binary=args.binary, log_path=args.log, test=args.test, print_report=args.print_report, latex=args.latex)
