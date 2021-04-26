@@ -12,7 +12,7 @@ import os
 import sys
 
 # maximum distance to a malicious host to alert being "similar"
-dist_threshold = 1
+dist_threshold = 0.50
 
 # port pairing method
 port_pairing = "exact"
@@ -43,15 +43,15 @@ def get_default_config():
 def get_configs():
     global plot
     plot = True
-    for threshold in range(0, 100, 1):
+    for threshold in range(100, 101, 1):
         yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
                "port_pairing": "exact"}
     plot = True
-    for threshold in range(0, 100, 1):
+    for threshold in range(100, 101, 1):
         yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
                "port_pairing": "strict"}
     plot = True
-    for threshold in range(0, 100, 1):
+    for threshold in range(100, 101, 1):
         yield {"dist_threshold": threshold/100.0, "focus_c2_ports": False,
                "port_pairing": "lenient"}
 
