@@ -1,36 +1,51 @@
-from methods.port_cluster.vectors import list_to_order_list, ListOrderVectorizer, construct_vector
-from sklearn.cluster import KMeans
-
-
-_NUM_CLUSTERS = 30
-
-_training_data = []
-_cls = None
-
-
 def add_data(ssh_port):
-    _training_data.append(construct_vector(_props_to_vectorizers, ssh_port))
+    pass
 
 
 def train():
-    global _cls
-    _cls = KMeans(n_clusters=_NUM_CLUSTERS)
-    _cls.fit(_training_data)
-    return _cls
+    pass
 
 
 def set_model(model):
-    global _cls
-    _cls = model
+    pass
 
 
 def convert(ssh_port):
-    if _cls:
-        pred = _cls.predict([construct_vector(_props_to_vectorizers, ssh_port)])[0]
-        pred += 1
-        return {"ssh:{}".format(ssh_port.port): pred}
-    print("WARNING: NO MODEL FOR SSH")
-    return {"ssh:{}".format(ssh_port.port): -1}
+    features = {}
+
+    for at in _algo_map.keys():
+        algos = ssh_port.get_property("ciphers:" + at)
+        if algos:
+            i = 0
+            for algo in _algo_map.get(at, []):
+                if algo in algos:
+                    features["ssh:" + at + ":" + algo + ":" + str(ssh_port.port)] = i + 1
+                    i += 1
+
+    return features
+
+
+_kex_algorithms = [
+    "curve25519-sha256",
+    "curve25519-sha256@libssh.org",
+    "ecdh-sha2-nistp256",
+    "ecdh-sha2-nistp384",
+    "ecdh-sha2-nistp521",
+    "diffie-hellman-group-exchange-sha256",
+    "diffie-hellman-group16-sha512",
+    "diffie-hellman-group18-sha512",
+    "diffie-hellman-group14-sha256",
+    "diffie-hellman-group14-sha1",
+]
+
+
+_server_host_key_algorithms = [
+    "rsa-sha2-512",
+    "rsa-sha2-256",
+    "ssh-rsa",
+    "ecdsa-sha2-nistp256",
+    "ssh-ed25519",
+]
 
 
 _encryption_algorithms = [
@@ -64,30 +79,14 @@ _compression_algorithms = [
     "none",
 ]
 
-_props_to_vectorizers = {
-    "ciphers:kex_algorithms": ListOrderVectorizer([
-        "curve25519-sha256",
-        "curve25519-sha256@libssh.org",
-        "ecdh-sha2-nistp256",
-        "ecdh-sha2-nistp384",
-        "ecdh-sha2-nistp521",
-        "diffie-hellman-group-exchange-sha256",
-        "diffie-hellman-group16-sha512",
-        "diffie-hellman-group18-sha512",
-        "diffie-hellman-group14-sha256",
-        "diffie-hellman-group14-sha1",
-    ]),
-    "ciphers:server_host_key_algorithms": ListOrderVectorizer([
-        "rsa-sha2-512",
-        "rsa-sha2-256",
-        "ssh-rsa",
-        "ecdsa-sha2-nistp256",
-        "ssh-ed25519",
-    ]),
-    "ciphers:encryption_algorithms_client_to_server": ListOrderVectorizer(_encryption_algorithms),
-    "ciphers:encryption_algorithms_server_to_client": ListOrderVectorizer(_encryption_algorithms),
-    "ciphers:mac_algorithms_client_to_server": ListOrderVectorizer(_mac_algorithms),
-    "ciphers:mac_algorithms_server_to_client": ListOrderVectorizer(_mac_algorithms),
-    "ciphers:compression_algorithms_client_to_server": ListOrderVectorizer(_compression_algorithms),
-    "ciphers:compression_algorithms_server_to_client": ListOrderVectorizer(_compression_algorithms),
+
+_algo_map = {
+    "kex_algorithms": _kex_algorithms,
+    "server_host_key_algorithms": _server_host_key_algorithms,
+    "encryption_algorithms_client_to_server": _encryption_algorithms,
+    "encryption_algorithms_server_to_client": _encryption_algorithms,
+    "mac_algorithms_client_to_server": _mac_algorithms,
+    "mac_algorithms_server_to_client": _mac_algorithms,
+    "compression_algorithms_client_to_server": _compression_algorithms,
+    "compression_algorithms_server_to_client": _compression_algorithms,
 }

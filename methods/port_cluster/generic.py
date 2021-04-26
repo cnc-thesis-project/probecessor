@@ -11,6 +11,9 @@ def set_model(model):
 
 
 def convert(port):
-    data_len = port.get_property("data")
-    ret = { "{}:{}".format(port.type, port.port): 1 if data_len == 0 else -1 }
+    entropy = port.get_property("entropy")
+    ret = {
+        port.type + ":" + str(port.port) + ":entropy": 0 if not entropy else entropy,
+    }
+
     return ret

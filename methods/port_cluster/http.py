@@ -1,48 +1,28 @@
-from methods.port_cluster.vectors import list_to_order_list, ListOrderVectorizer, construct_vector
-from sklearn.cluster import KMeans
-
-
-_NUM_CLUSTERS = 30
-
-_training_data = []
-_cls = None
-
-
-class StatusCodeVectorizer():
-    def get_default_vector(self):
-        return [-1]
-
-
-    # TODO: This is probably not a good method to vectorize the status code,
-    # as there is no concept of distance intrinsic to the values used.
-    # We should instead perhaps consider something that can encode a distance.
-    def get_vector(self, status_code):
-        return [status_code/100]
-
-
 def set_model(model):
-    global _cls
-    _cls = model
+    pass
 
 
 def add_data(http_port):
-    _training_data.append(construct_vector(_props_to_vectorizers, http_port))
+    pass
 
 
 def train():
-    global _cls
-    _cls = KMeans(n_clusters=_NUM_CLUSTERS)
-    _cls.fit(_training_data)
-    return _cls
+    pass
 
 
 def convert(http_port):
-    if _cls:
-        pred = _cls.predict([construct_vector(_props_to_vectorizers, http_port)])[0]
-        pred += 1
-        return {"http:{}".format(http_port.port): pred}
-    print("WARNING: NO MODEL FOR HTTP")
-    return {"http:{}".format(http_port.port): -1}
+    features = {}
+
+    for rt in _request_types:
+        header_keys = http_port.get_property(rt + ":header_keys")
+        if header_keys:
+            i = 0
+            for header_key in _header_keys:
+                if header_key in header_keys:
+                    features["http:" + rt + ":" + _header_keys[i] + ":" + str(http_port.port)] = i+1
+                    i += 1
+
+    return features
 
 
 _request_types = [
@@ -65,26 +45,15 @@ _vector_types = [
 ]
 
 
-_props_to_vectorizers = {}
-
-
-_vectorizers = {
-    "header_keys": ListOrderVectorizer([
-        "server",
-        "content-type",
-        "date",
-        "content-length",
-        "connection",
-        "Server",
-        "Content-type",
-        "Date",
-        "Content-length",
-        "Connection",
-    ]),
-    "status_code": StatusCodeVectorizer()
-}
-
-
-for request_type in _request_types:
-    for vector_type in _vector_types:
-        _props_to_vectorizers["{}:{}".format(request_type,  vector_type)] = _vectorizers[vector_type]
+_header_keys = [
+    "server",
+    "content-type",
+    "date",
+    "content-length",
+    "connection",
+    "Server",
+    "Content-type",
+    "Date",
+    "Content-length",
+    "Connection",
+]
