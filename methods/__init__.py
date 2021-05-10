@@ -5,6 +5,7 @@ import methods.jarm
 import methods.cert
 import methods.self_signed
 import methods.ssh_key
+import methods.ports
 
 
 methods = {
@@ -15,4 +16,5 @@ methods = {
     "cert": methods.cert,
     "self-signed": methods.self_signed,
     "ssh-key": methods.ssh_key,
+    "ports": methods.ports,
 }
