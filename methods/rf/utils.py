@@ -1,11 +1,11 @@
-import methods.port_cluster.models
+import methods.rf.models
 
 
 def cluster_module_data(mod_data):
     if not mod_data.get("vector"):
         print("WARNING: NO VECTOR FOR {}".format(mod_data["module"]))
         return
-    model = methods.port_cluster.models.models.get(mod_data["module"])
+    model = methods.rf.models.models.get(mod_data["module"])
     if not model:
         #print("WARNING: NO MODEL FOR {}".format(mod_data["module"]))
         return

@@ -7,18 +7,18 @@ import math
 import joblib
 from pprint import pprint
 import sys
-from methods.port_cluster.utils import cluster_module_data
-import methods.port_cluster.models
+from methods.rf.utils import cluster_module_data
+import methods.rf.models
 import modules.label
 import modules
 from modules.port import Port
 from modules.generic import GenericPort
 from modules.protocol import is_default_port
 
-import methods.port_cluster.http
-import methods.port_cluster.ssh
-import methods.port_cluster.generic
-import methods.port_cluster.tls
+import methods.rf.http
+import methods.rf.ssh
+import methods.rf.generic
+import methods.rf.tls
 
 
 # Whether to disregard all advanced features and only classify based on the list of open ports.
@@ -29,10 +29,10 @@ _CLASSIFY_MODE = 0
 
 
 _module_handlers = {
-    "HttpPort": methods.port_cluster.http,
-    "SshPort": methods.port_cluster.ssh,
-    "TlsPort": methods.port_cluster.tls,
-    "GenericPort": methods.port_cluster.generic,
+    "HttpPort": methods.rf.http,
+    "SshPort": methods.rf.ssh,
+    "TlsPort": methods.rf.tls,
+    "GenericPort": methods.rf.generic,
 }
 
 
@@ -42,7 +42,7 @@ _probe_hashers = {}
 for mod_name in _module_handlers.keys():
     _probe_hashers[mod_name] = FeatureHasher(n_features=50, input_type="dict")
 
-_generic_module = methods.port_cluster.generic
+_generic_module = methods.rf.generic
 
 _fingerprints = {}
 
