@@ -48,16 +48,16 @@ def report_to_latex_table(report):
         metrics = report[label]
         latex += label
         for metric_name in metric_names:
-            latex += " & " + str(metrics[metric_name])
+            latex += " & " + str(round(metrics[metric_name], 4))
         latex += " \\\\\n"
 
-    latex += "accuracy & & &" + str(summary_metrics["accuracy"]) + " & \\\\\n"
+    latex += "accuracy & & &" + str(round(summary_metrics["accuracy"], 4)) + " & \\\\\n"
     for summary_metric_name, summary_metric in summary_metrics.items():
         if summary_metric_name == "accuracy":
             continue
         latex += summary_metric_name
         for metric_name in metric_names:
-            latex += " & " + str(summary_metric[metric_name])
+            latex += " & " + str(round(summary_metric[metric_name], 4))
         latex += " \\\\\n"
 
     return latex
