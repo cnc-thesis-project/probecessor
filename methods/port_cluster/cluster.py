@@ -24,21 +24,45 @@ import methods.port_cluster.tls
 # Whether to disregard all advanced features and only classify based on the list of open ports.
 # Changing this requires retraining.
 # TODO: make shit like this configurable >:(
-_SIMPLE_CLASSIFY = False
+_MODE_PROBE = 2
+_CLASSIFY_MODE = 0
 
 
 _module_handlers = {
     "HttpPort": methods.port_cluster.http,
     "SshPort": methods.port_cluster.ssh,
     "TlsPort": methods.port_cluster.tls,
+    "GenericPort": methods.port_cluster.generic,
 }
 
 
 _open_ports_hasher = FeatureHasher(n_features=1000, input_type="dict")
 
+_probe_hashers = {}
+for mod_name in _module_handlers.keys():
+    _probe_hashers[mod_name] = FeatureHasher(n_features=50, input_type="dict")
+
 _generic_module = methods.port_cluster.generic
 
 _fingerprints = {}
+
+
+def _new_module_features_map():
+    features = {}
+    for mod_name in _module_handlers.keys():
+        features[mod_name] = []
+    return features
+
+
+def _hash_module_features_map(feat_map):
+    hashed = {}
+    for mod_name in sorted(feat_map.keys()):
+        hashed[mod_name] = _probe_hashers[mod_name].fit_transform(feat_map[mod_name])
+
+    ret = []
+    for mod_name in sorted(hashed.keys()):
+        ret.extend(hashed[mod_name])
+    return ret
 
 
 def _get_module_handler(module):
@@ -62,51 +86,60 @@ def is_binary_classifier():
 
 
 def _get_open_ports_vectors(*args):
-    # List of dictionaries containing named features that will go into the hasher.
-    X = []
-    # List of lists of features that will be appended to the hashed vector.
-    # These features will not be passed into the hasher, but will be appended to the hashers output vector.
-    X_nohash = []
+    open_ports_X = []
+    probe_X = {}
+    if _CLASSIFY_MODE & _MODE_PROBE:
+        for mod_name in _module_handlers.keys():
+            probe_X[mod_name] = []
     # Ground truth for training.
     y = []
     for host in args:
         open_ports_x = {}
+        probe_x = {}
+        for mod_name in _module_handlers.keys():
+            probe_x[mod_name] = {}
 
-        non_default_port_counts = 0
-        port_type_counts = {}
-        for p in modules._ports:
-            port_type_counts[p] = 0
         for port in host.ports.values():
-            if not _SIMPLE_CLASSIFY:
-                if not is_default_port(port):
-                    non_default_port_counts += 1
-
-                if port_type_counts.get(port.type):
-                    port_type_counts[port.type] += 1
-                else:
-                    port_type_counts["unknown"] += 1
+            if _CLASSIFY_MODE & _MODE_PROBE:
                 if port.tls:
-                    open_ports_x.update(_get_module_handler(port.tls).convert(port.tls))
-                    port_type_counts[port.tls.type] += 1
-
-                open_ports_x.update(_get_module_handler(port).convert(port))
-                open_ports_x[port.type + ":" + str(port.port)] = 1
+                    probe_x[port.tls.__class__.__name__].update(_get_module_handler(port.tls).convert(port.tls))
+                probe_x[port.__class__.__name__].update(_get_module_handler(port).convert(port))
             open_ports_x["port:" + str(port.port)] = 1
-        x_noh = [len(host.ports), non_default_port_counts/len(host.ports)]
-        for p in sorted(port_type_counts):
-            x_noh.append(port_type_counts[p]/len(host.ports))
-        X_nohash.append(x_noh)
-        X.append(open_ports_x)
+        open_ports_X.append(open_ports_x)
+
+        if _CLASSIFY_MODE & _MODE_PROBE:
+            for mod_name in probe_x.keys():
+                probe_X[mod_name].append(probe_x[mod_name])
         y.append(host.label_str())
-    #print("X[0]:", X[0])
-    hashed_X = _open_ports_hasher.fit_transform(X).toarray()
+    # DEBUG PRINT
+    #print("open_ports_X[0]:", open_ports_X[0])
+    # END DEBUG PRINT
+
+    # DEBUG PRINTS
+    #for mod_name in _module_handlers.keys():
+    #    print("probe_X[{}][0]:".format(mod_name), probe_X[mod_name][0])
+    # END DEBUG PRINTS
+
+    open_ports_h_X = _open_ports_hasher.fit_transform(open_ports_X).toarray()
+
     ret_X = []
-    for i in range(len(hashed_X)):
-        l = hashed_X[i].tolist()
-        l.extend(X_nohash[i])
+    for i in range(len(open_ports_h_X)):
+        l = open_ports_h_X[i].tolist()
         ret_X.append(l)
 
-    #print("ret_X[0]:", ret_X[0])
+    if _CLASSIFY_MODE & _MODE_PROBE:
+        for mod_name in sorted(probe_X.keys()):
+            hashed = _probe_hashers[mod_name].fit_transform(probe_X[mod_name]).toarray()
+            mod_X = []
+            for i in range(len(hashed)):
+                l = hashed[i].tolist()
+                mod_X.append(l)
+            for i in range(len(ret_X)):
+                ret_X[i] = ret_X[i] + mod_X[i]
+
+    # DEBUG PRINT
+    #print("ret_X[0] ({}):".format(len(ret_X[0])), ret_X[0])
+    # END DEBUG PRINT
     return ret_X, y
 
 
@@ -115,7 +148,7 @@ def get_fingerprints(data):
     module_models = {}
 
     # Train modules
-    if not _SIMPLE_CLASSIFY:
+    if _CLASSIFY_MODE & _MODE_PROBE:
         for host in data.values():
             for port in host.ports.values():
                 mod = _get_module_handler(port)

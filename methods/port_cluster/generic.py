@@ -2,7 +2,7 @@ def add_data(mod):
     pass
 
 
-def train(mods):
+def train():
     pass
 
 
